@@ -1,0 +1,12 @@
+enum Role {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  DELETED
+}

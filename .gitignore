@@ -13,3 +13,6 @@ package-lock.json
 pnpm-workspace.yaml
 .vscode
 AGENTS.md
+
+# Documentation
+docs/

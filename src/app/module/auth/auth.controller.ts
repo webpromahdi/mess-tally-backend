@@ -6,7 +6,7 @@ import { authService } from "./auth.service"
 import config from "../../config"
 import { AppError } from "../../utils/AppError"
 import { IRequestUser } from "./auth.interface"
-import type { TLoginUser, TRegisterUser, TVerifyEmail } from "./auth.validation"
+import type { TLoginUser, TRegisterUser, TVerifyEmail, TForgotPassword, TResetPassword } from "./auth.validation"
 const registerUser = catchAsync(async (req: Request, res: Response) => {
     const payload = req.body as TRegisterUser
 
@@ -126,10 +126,38 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const forgotPassword = catchAsync(async (req: Request, res: Response) => {
+    const payload = req.body as TForgotPassword
+
+    await authService.forgotPassword(payload)
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: 'Password reset code sent to your email',
+        data: null,
+    })
+})
+
+const resetPassword = catchAsync(async (req: Request, res: Response) => {
+    const payload = req.body as TResetPassword
+
+    await authService.resetPassword(payload)
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: 'Password reset successfully',
+        data: null,
+    })
+})
+
 export const authController = {
     registerUser,
     verifyEmail,
     loginUser,
     getMe,
-    refreshToken
+    refreshToken,
+    forgotPassword,
+    resetPassword,
 }

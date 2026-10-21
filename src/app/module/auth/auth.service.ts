@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs"
 import config from "../../config"
-import { ILoginUser, IRegisterUser, IRequestUser, IVerifyEmailPayload } from "./auth.interface"
+import { IForgotPasswordPayload, ILoginUser, IRegisterUser, IRequestUser, IResetPasswordPayload, IVerifyEmailPayload } from "./auth.interface"
 import { prisma } from "../../lib/prisma"
 import { AppError } from "../../utils/AppError"
 import httpStatus from "http-status"
@@ -156,16 +156,18 @@ const verifyEmail = async (payload: IVerifyEmailPayload) => {
 
     await redisClient.del(userRegistrationKey);
 
-    const tempatePath = path.join(
+    const templatePath = path.join(
         process.cwd(),
-        "src/app/templates/user-welcome-email.ejs",
+        "src/app/template/user-welcome-email.ejs",
     );
 
     const templateData = {
         name: createdUser.name,
+        email: createdUser.email,
+        appUrl: config.frontend_url,
     };
 
-    const html = await ejs.renderFile(tempatePath, templateData);
+    const html = await ejs.renderFile(templatePath, templateData);
 
     await transporter.sendMail({
         from: config.email_sender,
@@ -327,10 +329,144 @@ const refreshToken = async (token: string) => {
     };
 };
 
+const forgotPassword = async (payload: IForgotPasswordPayload) => {
+    const email = payload.email.trim().toLowerCase();
+
+    const user = await prisma.user.findUnique({
+        where: {
+            email,
+        },
+    });
+
+    if (!user) {
+        throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    }
+
+    if (user.status === Status.SUSPENDED) {
+        throw new AppError(httpStatus.FORBIDDEN, "User is suspended");
+    }
+
+    if (user.isDeleted || user.status === Status.DELETED) {
+        throw new AppError(httpStatus.FORBIDDEN, "User is deleted");
+    }
+
+    if (!user.emailVerified) {
+        throw new AppError(httpStatus.FORBIDDEN, "Email is not verified");
+    }
+
+    const expirationSeconds = 5 * 60;
+    const otpKey = `user-forgetPassword-otp:${email}`;
+
+    const otpValue = crypto.randomInt(100000, 1000000).toString();
+    if (config.node_env === "development") {
+        console.log(`[dev] OTP ${email} : ${otpValue}`);
+    }
+
+    await redisClient.set(otpKey, otpValue, {
+        expiration: {
+            type: "EX",
+            value: expirationSeconds,
+        },
+    });
+
+    const templatePath = path.join(
+        process.cwd(),
+        "src/app/template/forgotPassword.ejs",
+    );
+
+    const templateData = {
+        name: user.name,
+        email,
+        otp: otpValue,
+        expirationMinutes: expirationSeconds / 60,
+    };
+    const html = await ejs.renderFile(templatePath, templateData);
+
+    await transporter.sendMail({
+        from: config.email_sender,
+        to: email,
+        subject: "Forgot Password",
+        html,
+    });
+};
+
+const resetPassword = async (payload: IResetPasswordPayload) => {
+    const email = payload.email.trim().toLowerCase();
+    const { newPassword, otp } = payload;
+
+    const user = await prisma.user.findUnique({
+        where: {
+            email,
+        },
+    });
+
+    if (!user) {
+        throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    }
+
+    if (user.status === Status.SUSPENDED) {
+        throw new AppError(httpStatus.FORBIDDEN, "User is suspended");
+    }
+
+    if (user.isDeleted || user.status === Status.DELETED) {
+        throw new AppError(httpStatus.FORBIDDEN, "User is deleted");
+    }
+
+    if (!user.emailVerified) {
+        throw new AppError(httpStatus.FORBIDDEN, "Email is not verified");
+    }
+
+    const otpKey = `user-forgetPassword-otp:${email}`;
+
+    const redisOtp = await redisClient.get(otpKey);
+
+    if (!redisOtp) {
+        throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP");
+    }
+
+    if (redisOtp !== otp) {
+        throw new AppError(httpStatus.BAD_REQUEST, "OTP Does Not Match");
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 8);
+
+    await prisma.user.update({
+        where: {
+            email,
+        },
+        data: {
+            password: hashedPassword,
+        },
+    });
+
+    await redisClient.del(otpKey);
+
+    const templatePath = path.join(
+        process.cwd(),
+        "src/app/template/password-reset-success.ejs",
+    );
+
+    const templateData = {
+        name: user.name,
+        email,
+        appUrl: config.frontend_url,
+    };
+    const html = await ejs.renderFile(templatePath, templateData);
+
+    await transporter.sendMail({
+        from: config.email_sender,
+        to: email,
+        subject: "Password Reset Successful",
+        html,
+    });
+};
+
 export const authService = {
     registerUser,
     verifyEmail,
     loginUser,
     getMe,
-    refreshToken
+    refreshToken,
+    forgotPassword,
+    resetPassword,
 }

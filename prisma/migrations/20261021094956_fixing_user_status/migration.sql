@@ -1,0 +1,11 @@
+-- CreateEnum
+CREATE TYPE "Status" AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED');
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "status" "Status" NOT NULL DEFAULT 'ACTIVE';
+
+-- AlterTable
+ALTER TABLE "profile" ALTER COLUMN "bio" SET DEFAULT '',
+ALTER COLUMN "phone" SET DEFAULT '',
+ALTER COLUMN "imageUrl" SET DEFAULT '',
+ALTER COLUMN "imagePublicId" SET DEFAULT '';

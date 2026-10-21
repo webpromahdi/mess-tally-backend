@@ -1,8 +1,8 @@
-import { Role } from "../../../generated/prisma/enums";
+import type { Role } from "../../../generated/prisma/enums";
 
 export interface ILoginUser {
-    email: string;
-    password: string;
+	email: string;
+	password: string;
 }
 export interface IRequestUser {
 	userId: string;

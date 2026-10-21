@@ -9,14 +9,14 @@ import { updateProfileSchema } from "./profile.validate";
 const router = Router();
 
 router.patch(
-	"/profile_image",
+	"/image",
 	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
 	upload.single("profileImage"),
 	profileController.uploadProfileImage,
 );
 
 router.patch(
-	"/update_profile",
+	"/update",
 	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
 	validateRequest(updateProfileSchema),
 	profileController.updateProfile,

@@ -310,7 +310,7 @@
 								{
 									"key": "profileImage",
 									"type": "file",
-									"src": ""
+									"src": "/Users/masadrayan/My Projects/Mess Tally/mess-tally-backend/postman/sample-profile.png"
 								}
 							]
 						},
@@ -319,7 +319,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "v1", "profile", "image"]
 						},
-						"description": "Uploads or replaces the authenticated user's profile image.\n\nSend the image as `multipart/form-data` using the `profileImage` field. Only JPEG, PNG, and WebP images are accepted, with a maximum size of 5 MB. The previous Cloudinary image is deleted after a successful replacement.\n\nRequires a valid access token and an active, email-verified account. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
+						"description": "Uploads or replaces the authenticated user's profile image.\n\nSend the image as `multipart/form-data` using the `profileImage` field. Only JPEG, PNG, and WebP images are accepted, with a maximum size of 5 MB. The previous Cloudinary image is deleted after a successful replacement.\n\n**Before sending, select an actual image file in the `profileImage` field.** If that field is left empty, Postman fails locally with `EISDIR: illegal operation on a directory, read` and the request never reaches the server. The request method must be `PATCH`.\n\nRequires a valid access token and an active, email-verified account. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
 					},
 					"response": []
 				}

@@ -69,28 +69,25 @@ const uploadProfileImage = async (buffer: Buffer, userId: string) => {
 };
 
 const updateProfile = async (userId: string, payload: IUpdateProfile) => {
+	const user = await prisma.user.findUnique({
+		where: { id: userId },
+	});
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-    });
-    
-    if (!user) {
-        throw new AppError(httpStatus.NOT_FOUND, "User not found");
-    }
+	if (!user) {
+		throw new AppError(httpStatus.NOT_FOUND, "User not found");
+	}
 
-    if (user.status === Status.INACTIVE || user.status === Status.DELETED) {
-        throw new AppError(httpStatus.FORBIDDEN, "User is inactive or deleted");
-    }
+	if (user.status === Status.INACTIVE || user.status === Status.DELETED) {
+		throw new AppError(httpStatus.FORBIDDEN, "User is inactive or deleted");
+	}
 
-    if (user.status === Status.SUSPENDED) {
-        throw new AppError(httpStatus.FORBIDDEN, "User is suspended");
-    }
+	if (user.status === Status.SUSPENDED) {
+		throw new AppError(httpStatus.FORBIDDEN, "User is suspended");
+	}
 
-    if (!user.emailVerified) {
-        throw new AppError(httpStatus.FORBIDDEN, "Email is not verified");
-    }
-
-    
+	if (!user.emailVerified) {
+		throw new AppError(httpStatus.FORBIDDEN, "Email is not verified");
+	}
 
 	const updatedProfile = await prisma.profile.upsert({
 		where: {

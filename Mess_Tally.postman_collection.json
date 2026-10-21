@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
     "name": "Mess_Tally",
-    "description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login and Verify Email also save the returned tokens into collection variables for later use.\n\nNote: `getMe` and `refreshToken` exist in the controller/service but are not registered in `auth.route.ts` yet, so they are not included here.",
+    "description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login and Verify Email save the returned tokens into collection variables and also set the httpOnly cookies.\n\n`Get Me` accepts the access token either from the cookie jar or via the `Authorization: Bearer {{accessToken}}` header. `Refresh Token` reads the `refreshToken` httpOnly cookie, so it must run after Login or Verify Email in the same Postman session.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -152,6 +152,83 @@
               ]
             },
             "description": "Logs in an active, email-verified user and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Me",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Returns the logged-in user's account and profile.\n\nRequires a valid access token, supplied either by the `accessToken` cookie set during Login / Verify Email or by the `Authorization: Bearer <token>` header. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "",
+                  "if (body && body.data) {",
+                  "    if (body.data.accessToken) {",
+                  "        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
+                  "    }",
+                  "    if (body.data.refreshToken) {",
+                  "        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh-token"
+              ]
+            },
+            "description": "Issues a new access token and refresh token using the `refreshToken` httpOnly cookie.\n\nNo request body is required, and the controller does not read an Authorization header — run Login or Verify Email first so Postman has the refresh cookie. The test script updates both collection variables with the new tokens."
           },
           "response": []
         },

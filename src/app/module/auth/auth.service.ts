@@ -156,16 +156,18 @@ const verifyEmail = async (payload: IVerifyEmailPayload) => {
 
     await redisClient.del(userRegistrationKey);
 
-    const tempatePath = path.join(
+    const templatePath = path.join(
         process.cwd(),
-        "src/app/templates/user-welcome-email.ejs",
+        "src/app/template/user-welcome-email.ejs",
     );
 
     const templateData = {
         name: createdUser.name,
+        email: createdUser.email,
+        appUrl: config.frontend_url,
     };
 
-    const html = await ejs.renderFile(tempatePath, templateData);
+    const html = await ejs.renderFile(templatePath, templateData);
 
     await transporter.sendMail({
         from: config.email_sender,

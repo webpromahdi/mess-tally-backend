@@ -1,35 +1,35 @@
 model User {
-  id            String       @id @default(uuid())
-  email         String       @unique
-  emailVerified Boolean      @default(false)
-  password      String?      
+  id            String    @id @default(uuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  password      String?
   name          String
-  role          Role         @default(USER)
-  status       String       @default("ACTIVE")
-  isDeleted     Boolean    @default(false)
+  role          Role      @default(USER)
+  status        Status    @default(ACTIVE)
+  isDeleted     Boolean   @default(false)
   deletedAt     DateTime?
 
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  profile       profile?     
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile   profile?
 
   // Relations
-//   memberships   MessMember[]
+  //   memberships   MessMember[]
 }
 
 model profile {
-    id            String       @id @default(uuid())
-    userId        String       @unique
-    bio           String?      @default("")
-    phone         String?      @default("")
-    address       String?      @default("")
+  id      String  @id @default(uuid())
+  userId  String  @unique
+  bio     String? @default("")
+  phone   String? @default("")
+  address String? @default("")
 
-    imageUrl     String?       @default("")
-    imagePublicId String?      @default("")
+  imageUrl      String? @default("")
+  imagePublicId String? @default("")
 
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
-    
-    // Relations
-    user          User         @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

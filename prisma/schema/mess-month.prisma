@@ -1,0 +1,37 @@
+model MessMonth {
+  id        String      @id @default(uuid())
+  messId    String
+  name      String // "YYYY-MM"
+  startDate DateTime    @db.Date
+  endDate   DateTime?   @db.Date
+  status    MonthStatus @default(ACTIVE)
+  managerId String?
+
+  // Close / reopen audit
+  closedAt   DateTime?
+  closedById String?
+
+  // Snapshot written when the month is closed
+  lockedMealRate       Decimal? @db.Decimal(10, 2)
+  lockedTotalMeals     Float?
+  lockedTotalBazar     Decimal? @db.Decimal(10, 2)
+  lockedTotalUtilities Decimal? @db.Decimal(10, 2)
+  lockedSnapshot       Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  mess     Mess        @relation(fields: [messId], references: [id], onDelete: Cascade)
+  manager  MessMember? @relation("MonthManager", fields: [managerId], references: [id], onDelete: SetNull)
+  closedBy MessMember? @relation("MonthClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+
+  mealEntries     MealEntry[]
+  mealExpenses    MealExpense[]
+  utilityExpenses UtilityExpense[]
+  deposits        Deposit[]
+  payments        Payment[]
+
+  @@unique([messId, startDate], map: "mess_month_mess_start_key")
+  @@map("mess_month")
+}

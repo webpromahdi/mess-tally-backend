@@ -12,9 +12,6 @@ export const validateRequest = (zodSchema: z.ZodObject) => {
 		const result = zodSchema.safeParse(payload);
 
 		if (!result.success) {
-			console.log(result.error);
-			console.log(result.error.issues);
-
 			throw new AppError(
 				httpStatus.BAD_REQUEST,
 				result.error.issues[0].message,

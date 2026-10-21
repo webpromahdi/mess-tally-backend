@@ -20,12 +20,12 @@ model User {
 model profile {
     id            String       @id @default(uuid())
     userId        String       @unique
-    bio           String?
-    phone         String?    
+    bio           String?      @default("")
+    phone         String?      @default("")
     address       String?      @default("")
 
-    imageUrl     String?
-    imagePublicId String?
+    imageUrl     String?       @default("")
+    imagePublicId String?      @default("")
 
     createdAt     DateTime     @default(now())
     updatedAt     DateTime     @updatedAt

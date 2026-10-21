@@ -1,0 +1,22 @@
+model Mess {
+  id              String    @id @default(uuid())
+  name            String
+  address         String?
+  currency        String    @default("BDT")
+  roomCode        String    @unique
+  isJoinable      Boolean   @default(true)
+  requireApproval Boolean   @default(true)
+  plan            MessPlan  @default(FREE)
+  planExpiresAt   DateTime?
+  mealCutoffTime  String?   @default("11:00")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members  MessMember[]
+  months   MessMonth[]
+  payments Payment[]
+
+  @@map("mess")
+}

@@ -14,7 +14,7 @@ model User {
   profile   profile?
 
   // Relations
-  //   memberships   MessMember[]
+  memberships MessMember[]
 }
 
 model profile {

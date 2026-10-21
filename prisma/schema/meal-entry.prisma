@@ -1,0 +1,25 @@
+model MealEntry {
+  id          String   @id @default(uuid())
+  messMonthId String
+  memberId    String
+  date        DateTime @db.Date
+  breakfast   Float    @default(0)
+  lunch       Float    @default(0)
+  dinner      Float    @default(0)
+  guestMeals  Float    @default(0)
+  isLocked    Boolean  @default(false)
+  updatedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  messMonth MessMonth   @relation(fields: [messMonthId], references: [id], onDelete: Cascade)
+  member    MessMember  @relation("MealEntryMember", fields: [memberId], references: [id], onDelete: Restrict)
+  updatedBy MessMember? @relation("MealEntryUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([messMonthId, memberId, date], map: "meal_entry_month_member_date_key")
+  @@index([messMonthId, date])
+  @@index([memberId])
+  @@map("meal_entry")
+}

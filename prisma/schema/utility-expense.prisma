@@ -1,0 +1,28 @@
+model UtilityExpense {
+  id          String           @id @default(uuid())
+  messMonthId String           @map("mess_month_id")
+  category    UtilityCategory  @default(OTHER)
+  title       String
+  amount      Decimal          @db.Decimal(10, 2)
+  splitType   UtilitySplitType @default(EQUAL) @map("split_type") // only EQUAL used this phase
+  dueDate     DateTime?        @map("due_date") @db.Date
+  isPaid      Boolean          @default(false) @map("is_paid")
+  paidAt      DateTime?        @map("paid_at")
+  receiptUrl  String?          @map("receipt_url") // upload deferred
+  notes       String?
+  paidById    String?          @map("paid_by_id")
+  addedById   String           @map("added_by_id")
+  paymentId   String?          @unique(map: "utility_expense_payment_key") @map("payment_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  messMonth MessMonth   @relation(fields: [messMonthId], references: [id], onDelete: Cascade)
+  paidBy    MessMember? @relation("UtilityPaidBy", fields: [paidById], references: [id], onDelete: SetNull)
+  addedBy   MessMember  @relation("UtilityAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+  payment   Payment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([messMonthId, category])
+  @@map("utility_expense")
+}

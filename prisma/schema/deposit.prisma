@@ -1,0 +1,21 @@
+model Deposit {
+  id           String   @id @default(uuid())
+  messMonthId  String   
+  memberId     String   
+  receivedById String   
+  amount       Decimal  @db.Decimal(10, 2)
+  date         DateTime @default(now()) @db.Date
+  note         String?
+
+  createdAt DateTime @default(now()) 
+  updatedAt DateTime @updatedAt 
+
+  // Relations
+  messMonth  MessMonth  @relation(fields: [messMonthId], references: [id], onDelete: Cascade)
+  member     MessMember @relation("DepositMember", fields: [memberId], references: [id], onDelete: Restrict)
+  receivedBy MessMember @relation("DepositReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+
+  @@index([messMonthId, memberId])
+  @@index([memberId])
+  @@map("deposit")
+}

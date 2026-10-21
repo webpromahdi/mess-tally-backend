@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs"
 import config from "../../config"
-import { IForgotPasswordPayload, ILoginUser, IRegisterUser, IRequestUser, IVerifyEmailPayload } from "./auth.interface"
+import { IForgotPasswordPayload, ILoginUser, IRegisterUser, IRequestUser, IResetPasswordPayload, IVerifyEmailPayload } from "./auth.interface"
 import { prisma } from "../../lib/prisma"
 import { AppError } from "../../utils/AppError"
 import httpStatus from "http-status"
@@ -390,6 +390,77 @@ const forgotPassword = async (payload: IForgotPasswordPayload) => {
     });
 };
 
+const resetPassword = async (payload: IResetPasswordPayload) => {
+    const email = payload.email.trim().toLowerCase();
+    const { newPassword, otp } = payload;
+
+    const user = await prisma.user.findUnique({
+        where: {
+            email,
+        },
+    });
+
+    if (!user) {
+        throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    }
+
+    if (user.status === Status.SUSPENDED) {
+        throw new AppError(httpStatus.FORBIDDEN, "User is suspended");
+    }
+
+    if (user.isDeleted || user.status === Status.DELETED) {
+        throw new AppError(httpStatus.FORBIDDEN, "User is deleted");
+    }
+
+    if (!user.emailVerified) {
+        throw new AppError(httpStatus.FORBIDDEN, "Email is not verified");
+    }
+
+    const otpKey = `user-forgetPassword-otp:${email}`;
+
+    const redisOtp = await redisClient.get(otpKey);
+
+    if (!redisOtp) {
+        throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP");
+    }
+
+    if (redisOtp !== otp) {
+        throw new AppError(httpStatus.BAD_REQUEST, "OTP Does Not Match");
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 8);
+
+    await prisma.user.update({
+        where: {
+            email,
+        },
+        data: {
+            password: hashedPassword,
+        },
+    });
+
+    await redisClient.del(otpKey);
+
+    const templatePath = path.join(
+        process.cwd(),
+        "src/app/template/password-reset-success.ejs",
+    );
+
+    const templateData = {
+        name: user.name,
+        email,
+        appUrl: config.frontend_url,
+    };
+    const html = await ejs.renderFile(templatePath, templateData);
+
+    await transporter.sendMail({
+        from: config.email_sender,
+        to: email,
+        subject: "Password Reset Successful",
+        html,
+    });
+};
+
 export const authService = {
     registerUser,
     verifyEmail,
@@ -397,4 +468,5 @@ export const authService = {
     getMe,
     refreshToken,
     forgotPassword,
+    resetPassword,
 }

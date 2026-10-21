@@ -187,7 +187,43 @@
                 "forgot-password"
               ]
             },
-            "description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`.\n\nOnly active, email-verified, non-deleted users can request a reset. In development the OTP is printed in the server console.\n\nThe reset-password endpoint is not implemented yet."
+            "description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`.\n\nOnly active, email-verified, non-deleted users can request a reset. In development the OTP is printed in the server console.\n\nUse the received OTP with the Reset Password request."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "event": [],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"masad@example.com\",\n  \"newPassword\": \"NewPassword123\",\n  \"otp\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Verifies the password reset OTP sent by Forgot Password and updates the user's password.\n\nThe OTP must match `user-forgetPassword-otp:<email>` in Redis and expires after 5 minutes. It is deleted after a successful reset, so it can only be used once.\n\nA password-reset confirmation email is sent to the user after the password is updated."
           },
           "response": []
         }

@@ -14,5 +14,5 @@ pnpm-workspace.yaml
 .vscode
 AGENTS.md
 
-# Documentation
-docs/
+.agents/
+skills-lock.json

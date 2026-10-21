@@ -7,7 +7,11 @@
         "dev": "tsx watch src/server.ts",
         "build": "tsc",
         "start": "node dist/src/server.js",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "format:check": "npx @biomejs/biome format ./src",
+        "format:fix": "npx @biomejs/biome format --write ./src",
+        "lint:check": "npx @biomejs/biome lint ./src",
+        "lint:fix": "npx @biomejs/biome lint --write ./src"
     },
     "keywords": [],
     "author": "",
@@ -16,18 +20,27 @@
     "dependencies": {
         "@prisma/adapter-pg": "^7.9.1",
         "@prisma/client": "^7.9.1",
+        "bcrypt": "^6.0.0",
         "bcryptjs": "^3.0.3",
+        "cloudinary": "^2.11.0",
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.6",
         "dotenv": "^17.4.2",
+        "ejs": "^7.0.2",
         "express": "^5.2.1",
         "http-status": "^2.1.0",
         "jsonwebtoken": "^9.0.3",
-        "pg": "^8.22.0"
+        "nodemailer": "^10.1.7",
+        "pg": "^8.22.0",
+        "redis": "^6.3.0",
+        "zod": "^4.6.7"
     },
     "devDependencies": {
+        "@biomejs/biome": "2.5.15",
+        "@types/bcrypt": "^6.0.0",
         "@types/cookie-parser": "^1.4.10",
         "@types/cors": "^2.8.19",
+        "@types/ejs": "^3.1.5",
         "@types/express": "^5.0.6",
         "@types/jsonwebtoken": "^9.0.10",
         "@types/node": "^26.1.2",

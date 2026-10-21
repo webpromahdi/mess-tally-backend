@@ -1,351 +1,298 @@
 {
-  "info": {
-    "_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
-    "name": "Mess_Tally",
-    "description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login and Verify Email save the returned tokens into collection variables and also set the httpOnly cookies.\n\n`Get Me` accepts the access token either from the cookie jar or via the `Authorization: Bearer {{accessToken}}` header. `Refresh Token` reads the `refreshToken` httpOnly cookie, so it must run after Login or Verify Email in the same Postman session.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "item": [
-    {
-      "name": "Auth",
-      "item": [
-        {
-          "name": "Register",
-          "event": [],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Masad Rayan\",\n  \"email\": \"masad@example.com\",\n  \"password\": \"Password123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/register",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "register"
-              ]
-            },
-            "description": "Stores the pending registration in Redis and emails a 6-digit OTP (valid for 5 minutes). The user is only created after Verify Email.\n\nIn development the OTP is also printed in the server console as `[dev] OTP <email> : <otp>`."
-          },
-          "response": []
-        },
-        {
-          "name": "Verify Email",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const body = pm.response.json();",
-                  "",
-                  "if (body && body.data) {",
-                  "    if (body.data.accessToken) {",
-                  "        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
-                  "    }",
-                  "    if (body.data.refreshToken) {",
-                  "        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
-                  "    }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"masad@example.com\",\n  \"otp\": \"123456\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/verify-email",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "verify-email"
-              ]
-            },
-            "description": "Validates the registration OTP, creates the user, sends the welcome email, and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
-          },
-          "response": []
-        },
-        {
-          "name": "Login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const body = pm.response.json();",
-                  "",
-                  "if (body && body.data) {",
-                  "    if (body.data.accessToken) {",
-                  "        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
-                  "    }",
-                  "    if (body.data.refreshToken) {",
-                  "        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
-                  "    }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"masad@example.com\",\n  \"password\": \"Password123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "login"
-              ]
-            },
-            "description": "Logs in an active, email-verified user and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Me",
-          "event": [],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/me",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "me"
-              ]
-            },
-            "description": "Returns the logged-in user's account and profile.\n\nRequires a valid access token, supplied either by the `accessToken` cookie set during Login / Verify Email or by the `Authorization: Bearer <token>` header. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
-          },
-          "response": []
-        },
-        {
-          "name": "Refresh Token",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const body = pm.response.json();",
-                  "",
-                  "if (body && body.data) {",
-                  "    if (body.data.accessToken) {",
-                  "        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
-                  "    }",
-                  "    if (body.data.refreshToken) {",
-                  "        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
-                  "    }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [],
-            "body": {
-              "mode": "raw",
-              "raw": "",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/refresh-token",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "refresh-token"
-              ]
-            },
-            "description": "Issues a new access token and refresh token using the `refreshToken` httpOnly cookie.\n\nNo request body is required, and the controller does not read an Authorization header — run Login or Verify Email first so Postman has the refresh cookie. The test script updates both collection variables with the new tokens."
-          },
-          "response": []
-        },
-        {
-          "name": "Forgot Password",
-          "event": [],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"masad@example.com\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/forgot-password",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "forgot-password"
-              ]
-            },
-            "description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`.\n\nOnly active, email-verified, non-deleted users can request a reset. In development the OTP is printed in the server console.\n\nUse the received OTP with the Reset Password request."
-          },
-          "response": []
-        },
-        {
-          "name": "Reset Password",
-          "event": [],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"masad@example.com\",\n  \"newPassword\": \"NewPassword123\",\n  \"otp\": \"123456\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/reset-password",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "reset-password"
-              ]
-            },
-            "description": "Verifies the password reset OTP sent by Forgot Password and updates the user's password.\n\nThe OTP must match `user-forgetPassword-otp:<email>` in Redis and expires after 5 minutes. It is deleted after a successful reset, so it can only be used once.\n\nA password-reset confirmation email is sent to the user after the password is updated."
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "General",
-      "item": [
-        {
-          "name": "Root / Health",
-          "event": [],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                ""
-              ]
-            },
-            "description": "Basic health/welcome route. Returns `{ success: true, message: \"Welcome to MessTally\" }`."
-          },
-          "response": []
-        }
-      ]
-    }
-  ],
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:8000",
-      "type": "string"
-    },
-    {
-      "key": "accessToken",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "refreshToken",
-      "value": "",
-      "type": "string"
-    }
-  ]
+	"info": {
+		"_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
+		"name": "Mess_Tally",
+		"description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login and Verify Email save the returned tokens into collection variables and also set the httpOnly cookies.\n\n`Get Me` accepts the access token either from the cookie jar or via the `Authorization: Bearer {{accessToken}}` header. `Refresh Token` reads the `refreshToken` httpOnly cookie, so it must run after Login or Verify Email in the same Postman session.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Register",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Masad Rayan\",\n  \"email\": \"masad@example.com\",\n  \"password\": \"Password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "register"]
+						},
+						"description": "Stores the pending registration in Redis and emails a 6-digit OTP (valid for 5 minutes). The user is only created after Verify Email.\n\nIn development the OTP is also printed in the server console as `[dev] OTP <email> : <otp>`."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Email",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.accessToken) {",
+									"        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
+									"    }",
+									"    if (body.data.refreshToken) {",
+									"        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"masad@example.com\",\n  \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/verify-email",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "verify-email"]
+						},
+						"description": "Validates the registration OTP, creates the user, sends the welcome email, and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.accessToken) {",
+									"        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
+									"    }",
+									"    if (body.data.refreshToken) {",
+									"        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"masad@example.com\",\n  \"password\": \"Password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "login"]
+						},
+						"description": "Logs in an active, email-verified user and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Me",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "me"]
+						},
+						"description": "Returns the logged-in user's account and profile.\n\nRequires a valid access token, supplied either by the `accessToken` cookie set during Login / Verify Email or by the `Authorization: Bearer <token>` header. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.accessToken) {",
+									"        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
+									"    }",
+									"    if (body.data.refreshToken) {",
+									"        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/refresh-token",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "refresh-token"]
+						},
+						"description": "Issues a new access token and refresh token using the `refreshToken` httpOnly cookie.\n\nNo request body is required, and the controller does not read an Authorization header — run Login or Verify Email first so Postman has the refresh cookie. The test script updates both collection variables with the new tokens."
+					},
+					"response": []
+				},
+				{
+					"name": "Forgot Password",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"masad@example.com\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/forgot-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "forgot-password"]
+						},
+						"description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`.\n\nOnly active, email-verified, non-deleted users can request a reset. In development the OTP is printed in the server console.\n\nUse the received OTP with the Reset Password request."
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Password",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"masad@example.com\",\n  \"newPassword\": \"NewPassword123\",\n  \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/reset-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "reset-password"]
+						},
+						"description": "Verifies the password reset OTP sent by Forgot Password and updates the user's password.\n\nThe OTP must match `user-forgetPassword-otp:<email>` in Redis and expires after 5 minutes. It is deleted after a successful reset, so it can only be used once.\n\nA password-reset confirmation email is sent to the user after the password is updated."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "General",
+			"item": [
+				{
+					"name": "Root / Health",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": ["{{baseUrl}}"],
+							"path": [""]
+						},
+						"description": "Basic health/welcome route. Returns `{ success: true, message: \"Welcome to MessTally\" }`."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refreshToken",
+			"value": "",
+			"type": "string"
+		}
+	]
 }

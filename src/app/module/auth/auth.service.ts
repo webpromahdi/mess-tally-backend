@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs"
 import config from "../../config"
-import { ILoginUser, IRegisterUser, IRequestUser, IVerifyEmailPayload } from "./auth.interface"
+import { IForgotPasswordPayload, ILoginUser, IRegisterUser, IRequestUser, IVerifyEmailPayload } from "./auth.interface"
 import { prisma } from "../../lib/prisma"
 import { AppError } from "../../utils/AppError"
 import httpStatus from "http-status"
@@ -327,10 +327,72 @@ const refreshToken = async (token: string) => {
     };
 };
 
+const forgotPassword = async (payload: IForgotPasswordPayload) => {
+    const email = payload.email.trim().toLowerCase();
+
+    const user = await prisma.user.findUnique({
+        where: {
+            email,
+        },
+    });
+
+    if (!user) {
+        throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    }
+
+    if (user.status === Status.SUSPENDED) {
+        throw new AppError(httpStatus.FORBIDDEN, "User is suspended");
+    }
+
+    if (user.isDeleted || user.status === Status.DELETED) {
+        throw new AppError(httpStatus.FORBIDDEN, "User is deleted");
+    }
+
+    if (!user.emailVerified) {
+        throw new AppError(httpStatus.FORBIDDEN, "Email is not verified");
+    }
+
+    const expirationSeconds = 5 * 60;
+    const otpKey = `user-forgetPassword-otp:${email}`;
+
+    const otpValue = crypto.randomInt(100000, 1000000).toString();
+    if (config.node_env === "development") {
+        console.log(`[dev] OTP ${email} : ${otpValue}`);
+    }
+
+    await redisClient.set(otpKey, otpValue, {
+        expiration: {
+            type: "EX",
+            value: expirationSeconds,
+        },
+    });
+
+    const templatePath = path.join(
+        process.cwd(),
+        "src/app/template/forgotPassword.ejs",
+    );
+
+    const templateData = {
+        name: user.name,
+        email,
+        otp: otpValue,
+        expirationMinutes: expirationSeconds / 60,
+    };
+    const html = await ejs.renderFile(templatePath, templateData);
+
+    await transporter.sendMail({
+        from: config.email_sender,
+        to: email,
+        subject: "Forgot Password",
+        html,
+    });
+};
+
 export const authService = {
     registerUser,
     verifyEmail,
     loginUser,
     getMe,
-    refreshToken
+    refreshToken,
+    forgotPassword,
 }

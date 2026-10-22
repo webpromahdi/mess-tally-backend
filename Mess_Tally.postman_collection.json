@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
 		"name": "Mess_Tally",
-		"description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app: `/api/v1/auth`, `/api/v1/mess`, and the root health route.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login, Verify Email, Refresh Token, and Create Mess save the returned tokens into collection variables and also set the httpOnly cookies. Join Mess stores the joined mess and membership ids in collection variables.\n\nProtected routes accept the access token either from the cookie jar or via the `Authorization: Bearer {{accessToken}}` header. `Refresh Token` reads the `refreshToken` httpOnly cookie, so it must run after Login, Verify Email, or Create Mess in the same Postman session.",
+		"description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app: `/api/v1/auth`, `/api/v1/mess`, and the root health route.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login, Verify Email, Refresh Token, and Create Mess save the returned tokens into collection variables and also set the httpOnly cookies. Join Mess stores the joined mess and membership ids in collection variables.\n\nResend OTP re-issues a registration or password-reset code. It only works when that flow is already pending, and is limited to one request every 60 seconds with at most 3 resends per session.\n\nProtected routes accept the access token either from the cookie jar or via the `Authorization: Bearer {{accessToken}}` header. `Refresh Token` reads the `refreshToken` httpOnly cookie, so it must run after Login, Verify Email, or Create Mess in the same Postman session.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -22,7 +22,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"Masad Rayan\",\n  \"email\": \"masad@example.com\",\n  \"password\": \"Password123\"\n}",
+							"raw": "{\n  \"name\": \"Masad Rayan\",\n  \"email\": \"masadrayan1234@gmail.com\",\n  \"password\": \"Password123\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -34,7 +34,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "v1", "auth", "register"]
 						},
-						"description": "Stores the pending registration in Redis and emails a 6-digit OTP (valid for 5 minutes). The user is only created after Verify Email.\n\nIn development the OTP is also printed in the server console as `[dev] OTP <email> : <otp>`."
+						"description": "Validates the email with Zod, including a DNS MX lookup (domains that cannot receive mail, such as `gmail.co` or `example.com`, are rejected), stores the pending registration in Redis and emails a 6-digit OTP (valid for 5 minutes). The pending registration itself is kept for 1 hour so a new code can be requested after the OTP expires. The user is only created after Verify Email.\n\nThe sample body uses a real Gmail address because `example.com` publishes a null MX record and would be rejected.\n\nA 60-second cooldown is enforced per email, so an immediate second Register call returns `429`.\n\nReturns OTP timing metadata in `data`: `expiresInSeconds` (300), `resendAvailableInSeconds` (60) and `resendsRemaining` (3).\n\nIn development the OTP is also printed in the server console as `[dev] OTP <email> : <otp>`."
 					},
 					"response": []
 				},
@@ -70,7 +70,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"masad@example.com\",\n  \"otp\": \"123456\"\n}",
+							"raw": "{\n  \"email\": \"masadrayan1234@gmail.com\",\n  \"otp\": \"123456\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -82,7 +82,36 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "v1", "auth", "verify-email"]
 						},
-						"description": "Validates the registration OTP, creates the user, sends the welcome email, and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
+						"description": "Validates the registration OTP, creates the user, sends the welcome email, and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nIf the code has expired the API returns `Verification code has expired. Please request a new one.` — call Resend OTP with `purpose: \"REGISTRATION\"` to get a fresh code, since the pending registration survives for 1 hour. After 5 wrong codes the OTP is invalidated and the response is `429`.\n\nThe test script stores both tokens in collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Resend OTP",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"masadrayan1234@gmail.com\",\n  \"purpose\": \"REGISTRATION\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/resend-otp",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "resend-otp"]
+						},
+						"description": "Re-issues a 6-digit OTP when the previous one expired. `purpose` must be `REGISTRATION` (after Register) or `FORGOT_PASSWORD` (after Forgot Password).\n\nThe route only works when that flow is already pending. Without the Redis session created by Register or Forgot Password it returns `400` and sends nothing, so it cannot be called randomly.\n\nLimits per email + purpose:\n- `429` while the 60-second cooldown is still running; the message includes the seconds left.\n- `429` after 3 resends in the same session; restart the flow with Register or Forgot Password.\n\nThe previous code is invalidated immediately. Response `data` contains `expiresInSeconds` (300), `resendAvailableInSeconds` (60) and `resendsRemaining`.\n\nOther errors: `409` if the registration email is already registered, `403` if the account is suspended, deleted or unverified, and `404` if the user no longer exists."
 					},
 					"response": []
 				},
@@ -118,7 +147,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"masad@example.com\",\n  \"password\": \"Password123\"\n}",
+							"raw": "{\n  \"email\": \"masadrayan1234@gmail.com\",\n  \"password\": \"Password123\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -210,7 +239,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"masad@example.com\"\n}",
+							"raw": "{\n  \"email\": \"masadrayan1234@gmail.com\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -222,7 +251,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "v1", "auth", "forgot-password"]
 						},
-						"description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`.\n\nOnly active, email-verified, non-deleted users can request a reset. In development the OTP is printed in the server console.\n\nUse the received OTP with the Reset Password request."
+						"description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`, and a 1-hour `user-forgetPassword-session:<email>` marker records that a reset is pending so the code can be re-sent later.\n\nOnly active, email-verified, non-deleted users can request a reset. A 60-second cooldown is enforced, so an immediate repeat call returns `429`. In development the OTP is printed in the server console.\n\nReturns `expiresInSeconds` (300), `resendAvailableInSeconds` (60) and `resendsRemaining` (3) in `data`.\n\nIf the code expires, call Resend OTP with `purpose: \"FORGOT_PASSWORD\"`, then use the received OTP with Reset Password."
 					},
 					"response": []
 				},
@@ -239,7 +268,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"masad@example.com\",\n  \"newPassword\": \"NewPassword123\",\n  \"otp\": \"123456\"\n}",
+							"raw": "{\n  \"email\": \"masadrayan1234@gmail.com\",\n  \"newPassword\": \"NewPassword123\",\n  \"otp\": \"123456\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -251,7 +280,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "v1", "auth", "reset-password"]
 						},
-						"description": "Verifies the password reset OTP sent by Forgot Password and updates the user's password.\n\nThe OTP must match `user-forgetPassword-otp:<email>` in Redis and expires after 5 minutes. It is deleted after a successful reset, so it can only be used once.\n\nA password-reset confirmation email is sent to the user after the password is updated."
+						"description": "Verifies the password reset OTP sent by Forgot Password and updates the user's password.\n\nThe OTP must match `user-forgetPassword-otp:<email>` in Redis and expires after 5 minutes; once expired the API returns `Password reset code has expired. Please request a new one.` After 5 wrong codes the OTP is invalidated and the response is `429`.\n\nA successful reset clears the pending session marker and the resend limits, so a later Forgot Password request starts with 3 fresh resends. A password-reset confirmation email is sent to the user after the password is updated."
 					},
 					"response": []
 				}

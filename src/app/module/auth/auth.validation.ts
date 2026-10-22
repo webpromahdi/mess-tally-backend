@@ -103,8 +103,16 @@ export const resetPasswordSchema = z.object({
 		.regex(/^\d{6}$/, "Verification code must be exactly 6 digits"),
 });
 
+export const resendOtpSchema = z.object({
+	email,
+	purpose: z.enum(["REGISTRATION", "FORGOT_PASSWORD"], {
+		error: "Purpose must be either REGISTRATION or FORGOT_PASSWORD",
+	}),
+});
+
 export type TRegisterUser = z.infer<typeof registerUserSchema>;
 export type TVerifyEmail = z.infer<typeof verifyEmailSchema>;
 export type TLoginUser = z.infer<typeof loginUserSchema>;
 export type TForgotPassword = z.infer<typeof forgotPasswordSchema>;
 export type TResetPassword = z.infer<typeof resetPasswordSchema>;
+export type TResendOtp = z.infer<typeof resendOtpSchema>;

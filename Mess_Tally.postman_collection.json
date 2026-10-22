@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
 		"name": "Mess_Tally",
-		"description": "Postman collection for the MessTally backend. It mirrors every route currently mounted in `src/app.ts`: `/api/v1/auth`, `/api/v1/profile`, `/api/v1/mess` (including the `/mess/members` and `/mess/leave` routes), `/api/v1/months`, `/api/v1/meals`, and the root health route. Planned modules that are not mounted yet (bazar, utilities, summary, dashboard, AI) are intentionally absent.\n\nBase URL comes from the `baseUrl` collection variable (default `http://localhost:8000`, matching `PORT` in `.env`).\n\nAuth flow: Register sends an OTP, Verify Email creates the user and returns tokens, and Login/Refresh Token return a fresh token pair. Login, Verify Email, and Refresh Token set the `accessToken` and `refreshToken` httpOnly cookies; the Login and Refresh Token test scripts also copy the tokens plus `activeMessId`/`mess` into collection variables.\n\nMess scope: tokens carry identity only (`userId`, `name`, `email`, `role`). There is no `messId` claim and no mess-switch endpoint. The server reads `user.activeMessId`, verifies the matching `mess_member` row is `ACTIVE`, and only then runs the mess-scoped action. Create Mess, Join Mess, and Approve Member maintain that pointer; Leave Mess and Remove Member clear it.\n\nProtected requests accept the access token from the cookie jar or from the `Authorization: Bearer {{accessToken}}` header. Create Mess, Join Mess, and My Messes require `Role.USER`; the other protected routes accept any authenticated role, but mess-scoped actions still need a valid ACTIVE membership. `Refresh Token` reads the `refreshToken` httpOnly cookie, so run Login or Verify Email earlier in the same Postman session.",
+		"description": "Postman collection for the MessTally backend. It mirrors every route currently mounted in `src/app.ts`: `/api/v1/auth`, `/api/v1/profile`, `/api/v1/mess` (including the `/mess/members` and `/mess/leave` routes), `/api/v1/months`, `/api/v1/meals`, the bazar, utilities and utility fund deposit routes, and the root health route. Planned modules that are not mounted yet (summary, dashboard, AI) are intentionally absent.\n\nBase URL comes from the `baseUrl` collection variable (default `http://localhost:8000`, matching `PORT` in `.env`).\n\nAuth flow: Register sends an OTP, Verify Email creates the user and returns tokens, and Login/Refresh Token return a fresh token pair. Login, Verify Email, and Refresh Token set the `accessToken` and `refreshToken` httpOnly cookies; the Login and Refresh Token test scripts also copy the tokens plus `activeMessId`/`mess` into collection variables.\n\nMess scope: tokens carry identity only (`userId`, `name`, `email`, `role`). There is no `messId` claim and no mess-switch endpoint. The server reads `user.activeMessId`, verifies the matching `mess_member` row is `ACTIVE`, and only then runs the mess-scoped action. Create Mess, Join Mess, and Approve Member maintain that pointer; Leave Mess and Remove Member clear it.\n\nProtected requests accept the access token from the cookie jar or from the `Authorization: Bearer {{accessToken}}` header. Create Mess, Join Mess, and My Messes require `Role.USER`; the other protected routes accept any authenticated role, but mess-scoped actions still need a valid ACTIVE membership. `Refresh Token` reads the `refreshToken` httpOnly cookie, so run Login or Verify Email earlier in the same Postman session.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -1345,6 +1345,630 @@
 			]
 		},
 		{
+			"name": "Bazar",
+			"item": [
+				{
+					"name": "List Bazar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.month && body.data.month.name) {",
+									"        pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    }",
+									"    if (body.data.entries && body.data.entries.length) {",
+									"        pm.collectionVariables.set(\"bazarEntryId\", body.data.entries[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Lists bazar entries for one month with `houseTotal` and per-shopper totals (AC 4.1.2). `?month=YYYY-MM` is optional and defaults to the current UTC month. `from`/`to` are optional inclusive date filters inside the month; `shopperId` filters to one member. Ordering is `bazarDate` then `createdAt`, ascending. A month with no row still returns `200` with `month.exists = false` and zero totals — GET never creates a month. Any ACTIVE member can read. The test script stores the selected month and the first entry id."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Bazar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.entry && body.data.entry.id) {",
+									"    pm.collectionVariables.set(\"bazarEntryId\", body.data.entry.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Weekly grocery\",\n  \"items\": \"rice, chicken, oil\",\n  \"amount\": 2450.5,\n  \"bazarDate\": \"{{entryDate}}\",\n  \"shopperId\": \"{{memberId}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar"
+							]
+						},
+						"description": "Any ACTIVE member can record a bazar trip. `title` is optional and defaults to `\"Bazar\"`; `items` is optional free text. `amount` must be finite, `> 0`, at most 2 decimals and max `99,999,999.99`. `shopperId` must be an ACTIVE member of the caller's mess (`404` cross-mess, `409` non-active). The month is derived from `bazarDate` and auto-created on first write; a CLOSED month returns `409`. `addedById` is the caller and `paidFromMessFund` is forced `false` — neither is accepted from the body. Run Get Meal Grid first so `{{memberId}}` is populated, and set `{{entryDate}}` to a date in the selected month. Responds `201` with `{ entry }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Bazar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.entry && body.data.entry.id) {",
+									"    pm.collectionVariables.set(\"bazarEntryId\", body.data.entry.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Weekly grocery (revised)\",\n  \"items\": \"rice, chicken, oil, eggs\",\n  \"amount\": 2600.5\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar/{{bazarEntryId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar",
+								"{{bazarEntryId}}"
+							]
+						},
+						"description": "Partial update; at least one of `title`, `items`, `amount`, `bazarDate`, `shopperId` is required. `items: null` clears the text. Changing `bazarDate` across a month boundary moves the entry to the target month — both the old and target months must be ACTIVE (`409` otherwise). A cross-mess id returns `404`. `addedById` and `paidFromMessFund` cannot be changed. Responds `200` with `{ entry }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Bazar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"bazarEntryId\", \"\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar/{{bazarEntryId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar",
+								"{{bazarEntryId}}"
+							]
+						},
+						"description": "Deletes one bazar entry. The row is looked up by id AND the caller's mess, so a cross-mess id returns `404`. A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Utilities",
+			"item": [
+				{
+					"name": "List Utilities",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.month && body.data.month.name) {",
+									"        pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    }",
+									"    if (body.data.bills && body.data.bills.length) {",
+									"        pm.collectionVariables.set(\"billId\", body.data.bills[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Lists utility bills for one month plus totals (AC 5.1.2, AC 5.1.3). `?month=YYYY-MM` is optional and defaults to the current UTC month. `totals` contains `total`, `paid`, `unpaid`, `activeMemberCount` and `perPersonShare` (formula U1: total ÷ ACTIVE members, rounded to 2 decimals, `0` when there are no active members). A month with no row still returns `200` with `month.exists = false` and zero totals. GET never creates a month. Utility data never affects meals, bazar or settlement. The test script stores the selected month and the first bill id."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Utility Bill",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.bill && body.data.bill.id) {",
+									"    pm.collectionVariables.set(\"billId\", body.data.bill.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"month\": \"{{month}}\",\n  \"category\": \"ELECTRICITY\",\n  \"title\": \"October electricity\",\n  \"amount\": 3200,\n  \"dueDate\": \"{{entryDate}}\",\n  \"notes\": \"Paid from the utility fund\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities"
+							]
+						},
+						"description": "Any ACTIVE member can add a bill. `month` is required because bills have no natural date; the month is auto-created on first write and a CLOSED month returns `409`. `category` defaults to `OTHER`; `splitType` defaults to `EQUAL` and `CUSTOM_WEIGHT` is rejected with `400`. `dueDate` and `notes` may be `null`. New bills are always unpaid; payment state changes only through `PATCH /:id/paid`. `paymentId`, `receiptUrl`, `paidAt` and `paidById` are never accepted, and `addedById` is the caller. Responds `201` with `{ bill }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Utility Bill",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.bill && body.data.bill.id) {",
+									"    pm.collectionVariables.set(\"billId\", body.data.bill.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"October electricity (revised)\",\n  \"amount\": 3350,\n  \"notes\": \"Meter reading updated\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/{{billId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"{{billId}}"
+							]
+						},
+						"description": "Partial update of one bill; at least one of `category`, `title`, `amount`, `splitType`, `dueDate`, `notes` is required. `dueDate` and `notes` accept `null` to clear. A bill cannot move between months here — delete and recreate if the month is wrong. Payment fields are not editable. A cross-mess id returns `404` and a CLOSED month returns `409`. Responds `200` with `{ bill }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Utility Bill Paid",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"isPaid\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/{{billId}}/paid",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"{{billId}}",
+								"paid"
+							]
+						},
+						"description": "Marks a bill paid: `isPaid = true`, `paidAt = now`, `paidById = caller`. Kept as one endpoint so `isPaid` and `paidAt` always agree with the DB CHECK constraint. A CLOSED month returns `409`. Responds `200` with `{ bill }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Utility Bill Unpaid",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"isPaid\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/{{billId}}/paid",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"{{billId}}",
+								"paid"
+							]
+						},
+						"description": "Marks a bill unpaid and clears `paidAt` and `paidById` together, so the DB CHECK constraint stays satisfied. A CLOSED month returns `409`. Responds `200` with `{ bill }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Utility Bill",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"billId\", \"\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/{{billId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"{{billId}}"
+							]
+						},
+						"description": "Deletes one utility bill. Scoped by id AND the caller's mess (`404` cross-mess). A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Fund Deposits",
+			"item": [
+				{
+					"name": "List Fund Deposits",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.month && body.data.month.name) {",
+									"        pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    }",
+									"    if (body.data.deposits && body.data.deposits.length) {",
+									"        pm.collectionVariables.set(\"depositId\", body.data.deposits[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund-deposits?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund-deposits"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Lists utility fund deposits for one month with the total and per-member totals. Any ACTIVE member can read this for transparency. `?month=YYYY-MM` is optional and defaults to the current UTC month; a month with no row still returns `200` with `month.exists = false`, an empty list and `total: 0`. GET never creates a month. Multiple deposits per member and month are allowed. The test script stores the selected month and the first deposit id."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Fund Deposit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.deposit && body.data.deposit.id) {",
+									"    pm.collectionVariables.set(\"depositId\", body.data.deposit.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"amount\": 1000,\n  \"date\": \"{{entryDate}}\",\n  \"note\": \"October utility advance\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund-deposits",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund-deposits"
+							]
+						},
+						"description": "Manager only (`403` for a non-manager). Records a utility fund deposit for an ACTIVE member of the caller's mess (`404` cross-mess, `409` non-active). `date` is optional and defaults to today in UTC; the month is derived from it and auto-created on first write. A CLOSED month returns `409`. `receivedById` is the caller and is never accepted from the body. Multiple deposits per member per month are allowed. Run Get Meal Grid first so `{{memberId}}` is populated. Responds `201` with `{ deposit }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Fund Deposit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.deposit && body.data.deposit.id) {",
+									"    pm.collectionVariables.set(\"depositId\", body.data.deposit.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 1200,\n  \"note\": \"October utility advance (revised)\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund-deposits/{{depositId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund-deposits",
+								"{{depositId}}"
+							]
+						},
+						"description": "Manager only. Partial update of one deposit; at least one of `memberId`, `amount`, `date`, `note` is required. `note: null` clears the note. Changing `date` across a month boundary moves the deposit to the target month — both months must be ACTIVE (`409` otherwise). `receivedById` never changes. A cross-mess id returns `404`. Responds `200` with `{ deposit }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Fund Deposit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"depositId\", \"\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund-deposits/{{depositId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund-deposits",
+								"{{depositId}}"
+							]
+						},
+						"description": "Manager only. Deletes one deposit, scoped by id AND the caller's mess (`404` cross-mess). A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "General",
 			"item": [
 				{
@@ -1448,6 +2072,26 @@
 		{
 			"key": "mealEntryId",
 			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "bazarEntryId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "billId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "depositId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "entryDate",
+			"value": "2026-10-23",
 			"type": "string"
 		}
 	]

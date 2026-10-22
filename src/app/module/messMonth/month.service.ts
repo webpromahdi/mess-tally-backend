@@ -6,7 +6,9 @@ import { AppError } from "../../utils/AppError";
 import type { IRequestUser } from "../auth/auth.interface";
 import { assertManager, requireActiveMembership } from "../mess/mess.scope";
 import type {
+	IMonthContext,
 	IMonthListResult,
+	IMonthReadContext,
 	IMonthSummary,
 	IOpenMonthResult,
 } from "./month.interface";
@@ -14,6 +16,7 @@ import {
 	formatDateOnly,
 	monthRangeFromDate,
 	parseMonthParam,
+	type IMonthRange,
 } from "./month.util";
 
 const monthSelect = {
@@ -37,6 +40,18 @@ const toMonthSummary = (row: TMonthRow): IMonthSummary => ({
 	managerId: row.managerId,
 	closedAt: row.closedAt,
 	isCurrent: row.name === monthRangeFromDate(new Date()).name,
+});
+
+const toMonthContext = (
+	range: IMonthRange,
+	month: MessMonth | null,
+): IMonthContext => ({
+	id: month?.id ?? null,
+	name: range.name,
+	startDate: formatDateOnly(range.startDate),
+	endDate: formatDateOnly(range.endDate),
+	status: month?.status ?? null,
+	exists: Boolean(month),
 });
 
 const isUniqueViolation = (error: unknown): boolean =>
@@ -120,6 +135,22 @@ export const getMonthByDate = (
 	return prisma.messMonth.findUnique({
 		where: { messId_startDate: { messId, startDate: range.startDate } },
 	});
+};
+
+/**
+ * Resolves `?month=YYYY-MM` for a GET. Defaults to the current UTC month and
+ * never creates a row, so a quiet month still renders with zero totals.
+ */
+export const resolveMonthForRead = async (
+	messId: string,
+	monthParam?: string,
+): Promise<IMonthReadContext> => {
+	const range = monthParam
+		? parseMonthParam(monthParam)
+		: monthRangeFromDate(new Date());
+	const month = await getMonthByDate(messId, range.startDate);
+
+	return { range, context: toMonthContext(range, month) };
 };
 
 /**

@@ -243,25 +243,293 @@ Any `ACTIVE` member.
 - `isLocked` entry → `409`; `CLOSED` month → `409`.
 - Response `200`: `{ id, deleted: true }`.
 
+## Bazar
+
+All routes require an `ACTIVE` membership. Any `ACTIVE` member can read or write bazar entries (D3).
+
+### `GET /api/v1/bazar?month=&shopperId=&from=&to=`
+
+`month` defaults to the current UTC month. `from`/`to` are inclusive date-only
+filters that must stay inside the selected month. A month with no row returns
+`200` with `month.exists = false` and zero totals; GET never creates a month.
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "data": {
+    "month": {
+      "id": "uuid",
+      "name": "2026-10",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-31",
+      "status": "ACTIVE",
+      "exists": true
+    },
+    "entries": [
+      {
+        "id": "uuid",
+        "title": "Weekly grocery",
+        "items": "rice, chicken",
+        "amount": 2450.5,
+        "bazarDate": "2026-10-23",
+        "shopperId": "uuid",
+        "shopperName": "Masad",
+        "addedById": "uuid",
+        "addedByName": "Masad",
+        "paidFromMessFund": false,
+        "createdAt": "2026-10-23T10:00:00.000Z",
+        "updatedAt": "2026-10-23T10:00:00.000Z"
+      }
+    ],
+    "totals": {
+      "houseTotal": 2450.5,
+      "byShopper": [
+        {
+          "memberId": "uuid",
+          "name": "Masad",
+          "count": 1,
+          "amount": 2450.5
+        }
+      ]
+    }
+  }
+}
+```
+
+Entries are sorted by `bazarDate` then `createdAt`, ascending.
+
+### `POST /api/v1/bazar`
+
+```json
+{
+  "title": "Weekly grocery",
+  "items": "rice, chicken",
+  "amount": 2450.5,
+  "bazarDate": "2026-10-23",
+  "shopperId": "uuid"
+}
+```
+
+- `title` is optional and defaults to `"Bazar"`.
+- `items` is optional.
+- `amount` must be finite, `> 0`, at most 2 decimals, max `99,999,999.99`.
+- `shopperId` must be an `ACTIVE` member of the caller's mess.
+- The month is derived from `bazarDate` and auto-created (D1).
+- `addedById` is the caller; `paidFromMessFund` is forced `false` (D11). Neither is
+  accepted from the client.
+- Response `201`: `{ entry }`.
+
+### `PATCH /api/v1/bazar/:id`
+
+Accepts any subset of `title`, `items`, `amount`, `bazarDate`, `shopperId`.
+At least one field is required.
+
+Changing `bazarDate` across a month boundary moves the entry to the target
+month; both the old and target months must be `ACTIVE`. If the shopper later
+became `LEFT`, editing other fields still works; supplying a new `shopperId`
+requires an `ACTIVE` member.
+
+Response `200`: `{ entry }`.
+
+### `DELETE /api/v1/bazar/:id`
+
+Scoped by the caller's mess. A `CLOSED` month returns `409`.
+Response `200`: `{ id, deleted: true }`.
+
+## Utilities
+
+All routes require an `ACTIVE` membership. Any `ACTIVE` member can write bills
+(D4). Utility data never affects meals, bazar, the meal rate or settlement
+(AC 5.1.4).
+
+### `GET /api/v1/utilities?month=`
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "data": {
+    "month": {
+      "id": "uuid",
+      "name": "2026-10",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-31",
+      "status": "ACTIVE",
+      "exists": true
+    },
+    "bills": [
+      {
+        "id": "uuid",
+        "messMonthId": "uuid",
+        "category": "ELECTRICITY",
+        "title": "October electricity",
+        "amount": 3200,
+        "splitType": "EQUAL",
+        "dueDate": "2026-10-30",
+        "isPaid": false,
+        "paidAt": null,
+        "paidById": null,
+        "paidByName": null,
+        "notes": null,
+        "addedById": "uuid",
+        "addedByName": "Masad",
+        "createdAt": "2026-10-23T10:00:00.000Z",
+        "updatedAt": "2026-10-23T10:00:00.000Z"
+      }
+    ],
+    "totals": {
+      "total": 3200,
+      "paid": 0,
+      "unpaid": 3200,
+      "activeMemberCount": 4,
+      "perPersonShare": 800
+    }
+  }
+}
+```
+
+- `perPersonShare` is formula U1: total bills ÷ ACTIVE member count, rounded to
+  2 decimals. It is `0` when the count is zero (AC 5.1.2, AC 5.1.3).
+- `paid`/`unpaid` split on `isPaid`; both are included in `total`.
+- A month with no row returns `200` with `month.exists = false` and zero totals.
+
+### `POST /api/v1/utilities`
+
+```json
+{
+  "month": "2026-10",
+  "category": "ELECTRICITY",
+  "title": "October electricity",
+  "amount": 3200,
+  "dueDate": "2026-10-30",
+  "notes": null
+}
+```
+
+- `month` is required because bills have no natural date.
+- `category` defaults to `OTHER`.
+- `splitType` defaults to `EQUAL`; `CUSTOM_WEIGHT` returns `400`.
+- New bills are always unpaid. Payment state changes only through `/:id/paid`.
+- `paymentId`, `receiptUrl`, `paidAt` and `paidById` are never accepted.
+- `addedById` is the caller.
+- Response `201`: `{ bill }`.
+
+### `PATCH /api/v1/utilities/:id`
+
+Accepts any subset of `category`, `title`, `amount`, `splitType`, `dueDate`,
+`notes`. At least one field is required. `dueDate` and `notes` accept `null` to
+clear. A bill cannot move between months; delete and recreate if the month is
+wrong.
+
+Response `200`: `{ bill }`.
+
+### `PATCH /api/v1/utilities/:id/paid`
+
+```json
+{ "isPaid": true }
+```
+
+- `true` sets `isPaid`, `paidAt = now`, `paidById = caller`.
+- `false` clears `paidAt` and `paidById` so the DB CHECK constraint holds.
+- Response `200`: `{ bill }`.
+
+### `DELETE /api/v1/utilities/:id`
+
+Scoped by mess; `CLOSED` month → `409`.
+Response `200`: `{ id, deleted: true }`.
+
+## Utility Fund Deposits
+
+`GET` is available to every `ACTIVE` member. `POST`, `PATCH` and `DELETE` are
+manager-only (D5).
+
+### `GET /api/v1/utilities/fund-deposits?month=`
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "data": {
+    "month": { "...": "same month context" },
+    "deposits": [
+      {
+        "id": "uuid",
+        "memberId": "uuid",
+        "memberName": "Masad",
+        "memberStatus": "ACTIVE",
+        "amount": 1000,
+        "date": "2026-10-23",
+        "note": "October utility advance",
+        "receivedById": "uuid",
+        "receivedByName": "Manager",
+        "createdAt": "2026-10-23T10:00:00.000Z",
+        "updatedAt": "2026-10-23T10:00:00.000Z"
+      }
+    ],
+    "total": 1000,
+    "byMember": [
+      {
+        "memberId": "uuid",
+        "name": "Masad",
+        "status": "ACTIVE",
+        "count": 1,
+        "amount": 1000
+      }
+    ]
+  }
+}
+```
+
+Multiple deposits per member and month are allowed (multiple collection rounds).
+
+### `POST /api/v1/utilities/fund-deposits`
+
+Manager only.
+
+```json
+{
+  "memberId": "uuid",
+  "amount": 1000,
+  "date": "2026-10-23",
+  "note": "October utility advance"
+}
+```
+
+- `date` is optional and defaults to today in UTC; the month is derived from it.
+- `memberId` must be an `ACTIVE` member of the caller's mess.
+- `receivedById` is the caller and is never accepted from the body.
+- Response `201`: `{ deposit }`.
+
+### `PATCH /api/v1/utilities/fund-deposits/:id`
+
+Manager only. Accepts any subset of `memberId`, `amount`, `date`, `note`.
+Changing `date` may move the deposit to another month; both months must be
+writable. `receivedById` never changes. Response `200`: `{ deposit }`.
+
+### `DELETE /api/v1/utilities/fund-deposits/:id`
+
+Manager only. Scoped by mess; `CLOSED` month → `409`.
+Response `200`: `{ id, deleted: true }`.
+
 ## Status code summary
 
 | Code | Meaning |
 |---|---|
-| `400` | Bad month/date, negative or non-numeric meals, bad bulk payload |
+| `400` | Bad month/date/amount, negative meals, `CUSTOM_WEIGHT`, empty PATCH, bad filters |
 | `401` | Missing/invalid token |
-| `403` | No active membership, or non-manager opening a month |
-| `404` | Month/member/meal not found in the caller's mess |
-| `409` | Closed month, locked entry, non-active member, closing an already-closed month |
+| `403` | No active membership, non-manager opening a month or writing deposits |
+| `404` | Month/member/meal/bazar/bill/deposit not found in the caller's mess |
+| `409` | Closed month, locked meal entry, non-active member, already-closed month |
 
-## For Dev B (Bazar and Utilities)
-
-Import the shared month helpers instead of duplicating date logic:
+## Shared month helpers
 
 ```ts
 import {
   getOrCreateMonthByDate,
-  assertMonthWritable,
   getMonthByDate,
+  assertMonthWritable,
+  resolveMonthForRead,
 } from "../messMonth/month.service";
 
 import {

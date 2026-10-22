@@ -11,6 +11,7 @@ import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
 import { AuthRoutes } from "./app/module/auth/auth.route";
 import { messRoutes } from "./app/module/mess/mess.route";
+import { ProfileRoute } from "./app/module/profile/profile.route";
 
 const app: Application = express();
 
@@ -30,6 +31,7 @@ app.use(cookieParser());
 
 app.use("/api/v1/auth", AuthRoutes);
 app.use("/api/v1/mess", messRoutes);
+app.use("/api/v1/profile", ProfileRoute);
 
 // Basic route
 app.get("/", async (req: Request, res: Response) => {
@@ -39,7 +41,7 @@ app.get("/", async (req: Request, res: Response) => {
 	});
 });
 
-app.use(globalErrorHandler);
 app.use(notFound);
+app.use(globalErrorHandler);
 
 export default app;

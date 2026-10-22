@@ -119,10 +119,10 @@ export const auth = (...requiredRoles: Role[]) => {
 				);
 			}
 
-			if (user.status === Status.SUSPENDED) {
+			if (user.isDeleted || user.status !== Status.ACTIVE) {
 				throw new AppError(
-					httpStatus.FORBIDDEN,
-					"Your account has been suspended. Please contact support.",
+					httpStatus.UNAUTHORIZED,
+					"User is inactive or not found. Please log in again.",
 				);
 			}
 

@@ -1,16 +1,14 @@
 import httpStatus from "http-status";
+import Sqids from "sqids";
 import {
 	MemberStatus,
 	MessRole,
 	Status,
 } from "../../../generated/prisma/enums";
-import config from "../../config";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
-import { jwtUtils } from "../../utils/jwt";
 import type { IRequestUser } from "../auth/auth.interface";
 import type { ICreateMessPayload, IJoinMessPayload } from "./mess.interface";
-import Sqids from "sqids";
 
 // Shuffle your unambiguous alphabet once and keep it consistent across your app
 const sqids = new Sqids({
@@ -73,59 +71,45 @@ const createMess = async (user: IRequestUser, payload: ICreateMessPayload) => {
 		);
 	}
 
-	// Atomically grab the next guaranteed-unique integer from PostgreSQL
-	const [{ nextval }] = await prisma.$queryRaw<{ nextval: bigint }[]>`
-        SELECT nextval('mess_room_code_seq')
-    `;
+	const createdMess = await prisma.$transaction(async (tx) => {
+		// Atomically grab the next guaranteed-unique integer from PostgreSQL
+		const [{ nextval }] = await tx.$queryRaw<{ nextval: bigint }[]>`
+            SELECT nextval('mess_room_code_seq')
+        `;
 
-	const createdMess = await prisma.mess.create({
-		data: {
-			name,
-			address: payload.address?.trim() || null,
-			currency: payload.currency?.trim().toUpperCase() || "BDT",
-			mealCutoffTime: payload.mealCutoffTime?.trim() || "11:00",
-			isJoinable: payload.isJoinable ?? true,
-			requireApproval: payload.requireApproval ?? true,
-			roomCode: generateRoomCode(nextval, name),
-			members: {
-				create: {
-					userId: existingUser.id,
-					role: MessRole.OWNER,
-					status: MemberStatus.ACTIVE,
-					isManager: true,
+		const mess = await tx.mess.create({
+			data: {
+				name,
+				address: payload.address?.trim() || null,
+				currency: payload.currency?.trim().toUpperCase() || "BDT",
+				mealCutoffTime: payload.mealCutoffTime?.trim() || "11:00",
+				isJoinable: payload.isJoinable ?? true,
+				requireApproval: payload.requireApproval ?? true,
+				roomCode: generateRoomCode(nextval, name),
+				members: {
+					create: {
+						userId: existingUser.id,
+						role: MessRole.OWNER,
+						status: MemberStatus.ACTIVE,
+						isManager: true,
+					},
 				},
 			},
-		},
-		include: {
-			members: true,
-		},
+			include: {
+				members: true,
+			},
+		});
+
+		// The stored pointer every mess-scoped service resolves from.
+		await tx.user.update({
+			where: { id: existingUser.id },
+			data: { activeMessId: mess.id },
+		});
+
+		return mess;
 	});
 
-	const jwtPayload = {
-		userId: existingUser.id,
-		name: existingUser.name,
-		email: existingUser.email,
-		role: existingUser.role,
-		messId: createdMess.id,
-	};
-
-	const accessToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_access_secret,
-		config.jwt_access_expires_in,
-	);
-
-	const refreshToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_refresh_secret,
-		config.jwt_refresh_expires_in,
-	);
-
-	return {
-		mess: createdMess,
-		accessToken,
-		refreshToken,
-	};
+	return { mess: createdMess };
 };
 
 const joinMess = async (user: IRequestUser, payload: IJoinMessPayload) => {
@@ -211,10 +195,95 @@ const joinMess = async (user: IRequestUser, payload: IJoinMessPayload) => {
 		},
 	});
 
+	if (membership.status === MemberStatus.ACTIVE) {
+		await prisma.user.update({
+			where: { id: user.userId },
+			data: { activeMessId: mess.id },
+		});
+	}
+
 	return { mess, membership };
+};
+
+const getMyMesses = async (user: IRequestUser) => {
+	const [userRow, memberships] = await Promise.all([
+		prisma.user.findUnique({
+			where: { id: user.userId },
+			select: { activeMessId: true },
+		}),
+		prisma.messMember.findMany({
+			where: {
+				userId: user.userId,
+				status: { not: MemberStatus.REJECTED },
+			},
+			orderBy: { joinedAt: "desc" },
+			select: {
+				id: true,
+				role: true,
+				status: true,
+				isManager: true,
+				joinedAt: true,
+				leftAt: true,
+				mess: {
+					select: {
+						id: true,
+						name: true,
+						address: true,
+						currency: true,
+						roomCode: true,
+						isJoinable: true,
+						requireApproval: true,
+						mealCutoffTime: true,
+					},
+				},
+			},
+		}),
+	]);
+
+	// The pointer is only echoed back when it still matches an ACTIVE membership.
+	// A stale pointer is treated as "no active mess" instead of leaking a mess
+	// the user no longer belongs to.
+	const activeMessId = userRow?.activeMessId
+		? (memberships.find(
+				(member) =>
+					member.status === MemberStatus.ACTIVE &&
+					member.mess.id === userRow.activeMessId,
+			)?.mess.id ?? null)
+		: null;
+
+	const statusOrder: Record<MemberStatus, number> = {
+		[MemberStatus.ACTIVE]: 0,
+		[MemberStatus.PENDING]: 1,
+		[MemberStatus.LEFT]: 2,
+		[MemberStatus.REJECTED]: 3,
+	};
+
+	const messes = memberships
+		.map((member) => ({
+			membershipId: member.id,
+			role: member.role,
+			status: member.status,
+			isManager: member.isManager,
+			joinedAt: member.joinedAt,
+			leftAt: member.leftAt,
+			isActive: member.mess.id === activeMessId,
+			mess: member.mess,
+		}))
+		.sort((a, b) => {
+			const byStatus = statusOrder[a.status] - statusOrder[b.status];
+
+			if (byStatus !== 0) {
+				return byStatus;
+			}
+
+			return b.joinedAt.getTime() - a.joinedAt.getTime();
+		});
+
+	return { activeMessId, messes };
 };
 
 export const messService = {
 	createMess,
 	joinMess,
+	getMyMesses,
 };

@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
 import httpStatus from "http-status";
 import { MemberStatus } from "../../../generated/prisma/enums";
-import config from "../../config";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { sendResponse } from "../../utils/sendResponse";
@@ -20,23 +19,7 @@ const createMess = catchAsync(async (req: Request, res: Response) => {
 
 	const payload = req.body as ICreateMessPayload;
 
-	const { mess, accessToken, refreshToken } = await messService.createMess(
-		user,
-		payload,
-	);
-
-	res.cookie("accessToken", accessToken, {
-		httpOnly: true,
-		secure: config.node_env !== "development",
-		sameSite: config.node_env === "development" ? "lax" : "none",
-		maxAge: 1000 * 60 * 60 * 24, // 24 hour or 1 day
-	});
-	res.cookie("refreshToken", refreshToken, {
-		httpOnly: true,
-		secure: config.node_env !== "development",
-		sameSite: config.node_env === "development" ? "lax" : "none",
-		maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-	});
+	const { mess } = await messService.createMess(user, payload);
 
 	sendResponse(res, {
 		statusCode: httpStatus.CREATED,
@@ -44,8 +27,7 @@ const createMess = catchAsync(async (req: Request, res: Response) => {
 		message: "Mess created successfully",
 		data: {
 			mess,
-			accessToken,
-			refreshToken,
+			activeMessId: mess.id,
 		},
 	});
 });
@@ -74,11 +56,32 @@ const joinMess = catchAsync(async (req: Request, res: Response) => {
 		data: {
 			mess,
 			membership,
+			activeMessId: membership.status === MemberStatus.ACTIVE ? mess.id : null,
 		},
+	});
+});
+
+const getMyMesses = catchAsync(async (req: Request, res: Response) => {
+	const user = req.user;
+	if (!user) {
+		throw new AppError(
+			httpStatus.UNAUTHORIZED,
+			"User information is missing in the request",
+		);
+	}
+
+	const data = await messService.getMyMesses(user);
+
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: "Messes fetched successfully",
+		data,
 	});
 });
 
 export const messController = {
 	createMess,
 	joinMess,
+	getMyMesses,
 };

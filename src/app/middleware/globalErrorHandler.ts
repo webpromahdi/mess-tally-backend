@@ -6,6 +6,25 @@ import { Prisma } from "../../generated/prisma/client";
 import config from "../config";
 import { AppError } from "../utils/AppError";
 
+/**
+ * Connection-level failures raised by the pg driver adapter (raw socket codes)
+ * or by Prisma itself. They say nothing about the request, so the right answer
+ * is `503` + "retry", not a generic `500`.
+ */
+const TRANSIENT_DB_ERROR_CODES = new Set([
+	"ETIMEDOUT",
+	"ECONNRESET",
+	"ECONNREFUSED",
+	"ENOTFOUND",
+	"EAI_AGAIN",
+	"EPIPE",
+	"P1001",
+	"P1002",
+	"P1008",
+	"P1017",
+	"P2024",
+]);
+
 export const globalErrorHandler = async (
 	err: any,
 	_req: Request,
@@ -25,7 +44,11 @@ export const globalErrorHandler = async (
 		statusCode = httpStatus.BAD_REQUEST;
 		errorMessage = "You have provided incorrect field type or missing fields";
 	} else if (err instanceof Prisma.PrismaClientKnownRequestError) {
-		if (err.code === "P2002") {
+		if (TRANSIENT_DB_ERROR_CODES.has(err.code)) {
+			statusCode = httpStatus.SERVICE_UNAVAILABLE;
+			errorMessage =
+				"The database is temporarily unavailable. Please try again in a moment.";
+		} else if (err.code === "P2002") {
 			(statusCode = httpStatus.BAD_REQUEST),
 				(errorMessage = "Duplicate Key Error");
 		} else if (err.code === "P2003") {
@@ -42,7 +65,7 @@ export const globalErrorHandler = async (
 			errorMessage =
 				"Authentication failed against database server. Please Check Your Credentials";
 		} else if (err.errorCode === "P1001") {
-			statusCode = httpStatus.BAD_REQUEST;
+			statusCode = httpStatus.SERVICE_UNAVAILABLE;
 			errorMessage = "Can't reach database server";
 		}
 	} else if (err instanceof Prisma.PrismaClientUnknownRequestError) {

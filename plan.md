@@ -14,7 +14,7 @@
 1. **Contract first.** Every endpoint is agreed (path, request, response, errors) before it is built. Frontend mocks against the contract while we build.
 2. **Vertical slices.** One dev owns a module end to end: route, validation, service, Prisma, tests.
 3. **Pure logic stays pure.** Calculator, settlement, utility share and simulation are pure functions with unit tests. The AI tools reuse them, so numbers always match the Dashboard.
-4. **Every query is mess-scoped.** `messId` comes from the JWT, never from the request body.
+4. **Every query is mess-scoped.** The JWT is identity-only; each mess-scoped service resolves the caller's active mess from `user.activeMessId` and verifies the matching `mess_member` row is `ACTIVE`.
 5. **Meal and utility accounting never mix** (PRD 1.5 #2).
 6. **Cross-review.** Dev A reviews Dev B's PRs and the other way around. No self-merge.
 
@@ -25,7 +25,7 @@
 ```
 Phase 0  Foundation (shared contracts, schema, guards)
    |
-Phase 1  Mess + Members  (gate for everything: JWT carries messId)
+Phase 1  Mess + Members  (gate for everything: active mess resolves from user.activeMessId)
    |
 Phase 2  Months + Meals (A)  ||  Bazar + Utilities + Fund (B)
    |
@@ -47,7 +47,7 @@ Phase 6  Hardening, Docs, Deploy (both)
 | Phase | Dev A | Dev B | Est. |
 |---|---|---|---|
 | 0 Foundation | Prisma schema, migrations, seed | Guards, shared utils, API contract doc | 1-2 d |
-| 1 Mess + Members | Mess create/join/switch, JWT `messId` | Members list, approve/reject, leave, settings | 3-4 d |
+| 1 Mess + Members | Mess create/join, active-mess pointer | Members list, approve/reject, leave, settings | 3-4 d |
 | 2 Inputs | Months + Meals | Bazar + Utilities + Deposits | 4-5 d |
 | 3 Calculations | Summary calculator + settlement | Utility share/fund + Dashboard | 3-4 d |
 | 4 Finalize | Close month + locking + export | Aggregation tuning, indexes, edge cases | 2-3 d |
@@ -70,12 +70,14 @@ Defaults are proposed so we are not blocked. Confirm or change in the Phase 0 ca
 | D4 | Who can write utility bills? | Any ACTIVE member (PRD story 5.1). |
 | D5 | Who can record deposits, open/close months, approve members? | `is_manager = true` only. |
 | D6 | PRD uses legacy `paidByProfileId` and `profileId`. Schema uses `shopper_id` and `member_id`. | API uses `shopperId` and `memberId` (mess_member ids). Frontend is told once. |
-| D7 | Mess switch token refresh. | `POST /api/mess/switch` returns a new JWT. Old token stays valid until expiry (no blacklist this phase). |
-| D8 | Who is allowed to remove a manager or transfer ownership? | OWNER only toggles `is_manager`. Ownership transfer is out of scope. |
+| D7 | How does a request know which mess it is for? | The JWT stays identity-only. `POST /api/mess`, `/join` and `/approve` write `user.activeMessId`; mess-scoped services resolve it and verify the `mess_member` row is `ACTIVE`. There is no switch endpoint and no `messId` claim. |
+| D8 | Who is allowed to remove a manager or transfer ownership? | The current manager transfers `is_manager` to another ACTIVE member and gives it up in the same transaction (one manager per mess). `role = OWNER` is unchanged by that transfer, and the owner can call it even when not currently the manager. Ownership itself moves with `PATCH /api/mess/members/:id/owner` (OWNER only): the target becomes `OWNER` + manager and the previous owner becomes a `MEMBER`. An owner with other ACTIVE members must transfer ownership before leaving. |
 | D9 | Rounding. | Compute in full precision, round to 2 decimals at the response layer. Settlement uses a 0.01 tolerance and puts leftover cents on the last transfer. |
 | D10 | A user who LEFT or was REJECTED tries to join again. `(user_id, mess_id)` is unique, so a second row is impossible. | Reuse the same row: set status back to PENDING (or ACTIVE if no approval needed), clear `left_at`. Return 409 only for PENDING or ACTIVE. |
 | D11 | `meal_expense.paid_from_mess_fund` default was TRUE, but meal formula 5 credits the shopper's own money. | Default FALSE. The calculator ignores this flag this phase (there is no meal fund). |
 | D12 | Deleting a member with data. The old SQL cascaded `meal_entry` on member delete. | `meal_entry.member` is RESTRICT, same as bazar and deposits (AC 2.1.3). Use `status = LEFT`. |
+| D13 | Where is the active mess stored? | On the user row: `User.activeMessId` (nullable FK to `mess`, `onDelete: SetNull`). It is a pointer, always verified against an `ACTIVE` membership before use. |
+| D14 | Can a user be ACTIVE in more than one mess? | No. One active mess per user; joining while active elsewhere returns 409. The pointer makes that single active mess explicit. |
 
 ---
 
@@ -93,39 +95,39 @@ Goal: shared base so nobody blocks anybody.
 
 ### Dev B
 - [ ] Confirm shared utilities exist: `validateRequest`, `apiResponse`, `AppError`, global error handler, `date.util.ts`.
-- [ ] Guards (`src/middleware`):
-  - `checkAuth` (exists)
-  - `requireMess` - JWT must contain `messId`
-  - `requireActiveMember` - loads `mess_member`, must be `ACTIVE`, attaches `req.member`
-  - `requireManager` - `req.member.is_manager === true`
+- [ ] Auth and scope helpers:
+  - `checkAuth` (exists) - identity only, no mess scope
+  - `mess.scope.ts` service helper - `requireActiveMembership(userId)` reads `user.activeMessId`, verifies the `mess_member` row is `ACTIVE`, returns the member + mess
+  - `assertManager(member)` / `assertOwner(member)` in the same helper
 - [ ] `month.util.ts`: `parseMonthParam("YYYY-MM")`, `monthRangeFromDate(date)`, UTC safe.
 - [ ] Write `docs/api-contract.md` (or OpenAPI) with all endpoints from section 12. Share with frontend.
 - [ ] Standard pagination and error code list (400, 401, 403, 404, 409).
 
 ### Done when
-- Migration runs clean, seed runs, guards unit-tested, contract doc shared.
+- Migration runs clean, seed runs, scope helpers unit-tested, contract doc shared.
 
 ---
 
 ## 6. Phase 1 - Mess and Members (3-4 days)
 
-PRD modules 1.5 and 2. Everything else depends on `messId` in the JWT, so this goes first.
+PRD modules 1.5 and 2. Everything else depends on an active mess, so this goes first.
 
 ### Dev A - Mess lifecycle
-- [ ] `POST /api/mess` - create mess, generate unique `room_code` (retry on collision), create OWNER + `is_manager` + ACTIVE member in one transaction, return 201 + new JWT with `messId` (AC 1.5.1.x).
-- [ ] `POST /api/mess/join` - find by `room_code` (404), reject if `is_joinable = false` (403), reject duplicate PENDING/ACTIVE (409), PENDING or ACTIVE depending on `require_approval`; LEFT or REJECTED users reuse their row (D10) (AC 1.5.2.x).
-- [ ] Update `jwt.ts`: payload `{ userId, messId }`. Patch login: 0 messes -> no `messId`, 1 mess -> auto-select, many -> return mess list and no `messId`.
-- [ ] `GET /api/mess/my` - list the user's messes with role and status (for the mess picker).
-- [ ] `POST /api/mess/switch` - verify ACTIVE membership, issue new JWT (AC 1.5.4.x).
-- [ ] Tests: create, join variants, switch, login with 0/1/many messes.
+- [ ] `POST /api/mess` - create mess, generate a unique `room_code` from the `mess_room_code_seq` sequence + sqids, create OWNER + `is_manager` + ACTIVE member and set `user.activeMessId` in one transaction, return 201 with the mess (AC 1.5.1.x).
+- [ ] `POST /api/mess/join` - find by `room_code` (404), reject if `is_joinable = false` (403), reject duplicate PENDING/ACTIVE (409), PENDING or ACTIVE depending on `require_approval`; set `user.activeMessId` when ACTIVE; LEFT or REJECTED users reuse their row (D10) (AC 1.5.2.x).
+- [ ] Tokens stay identity-only (`{ userId, name, email, role }`). Login and refresh return `activeMessId` (+ mess summary) read from the user row.
+- [x] `GET /api/mess/my` - list the user's messes with role and status (for the mess picker). Response: `{ activeMessId, messes[] }`, `ACTIVE`/`PENDING`/`LEFT` only, `isActive` marks the verified pointer.
+- [ ] No switch endpoint; switching means leaving the current mess and joining another.
+- [ ] Tests: create, join variants, active pointer set/clear, login with 0/1 active mess.
 
 ### Dev B - Members and settings
-- [ ] `GET /api/mess/members` - all members for active mess (id, name, role, status, is_manager). Optional `?status=ACTIVE` for dropdowns (AC 2.1.1, 2.1.2).
-- [ ] `GET /api/mess/members/pending` - manager only.
-- [ ] `PATCH /api/mess/members/:id/approve` and `/reject` - manager only, must be PENDING, scoped to same mess (AC 1.5.3.x).
-- [ ] `PATCH /api/mess/members/:id/manager` - OWNER toggles `is_manager`.
-- [ ] `POST /api/mess/leave` - sets `LEFT` + `left_at`. Owner cannot leave while other ACTIVE members exist.
-- [ ] `DELETE /api/mess/members/:id` - blocked with clear error if meals or bazar exist; suggest `LEFT` (AC 2.1.3).
+- [x] `GET /api/mess/members` - all members for active mess (id, name, role, status, is_manager). Optional `?status=ACTIVE` for dropdowns (AC 2.1.1, 2.1.2).
+- [x] `GET /api/mess/members/pending` - manager only.
+- [x] `PATCH /api/mess/members/:id/approve` and `/reject` - manager only, must be PENDING, scoped to same mess (AC 1.5.3.x).
+- [x] `PATCH /api/mess/members/:id/manager` - the current manager transfers the manager position to an ACTIVE member and gives up `is_manager`; `OWNER` keeps the role and only one manager exists per mess.
+- [x] `PATCH /api/mess/members/:id/owner` - owner only; the target must be ACTIVE. The target becomes `OWNER` + manager and the previous owner becomes a `MEMBER` without `is_manager`, keeping exactly one owner and one manager.
+- [x] `POST /api/mess/leave` - sets `LEFT` + `left_at`. An owner with other ACTIVE members must transfer ownership first; the last active member can always leave.
+- [x] `DELETE /api/mess/members/:id` - blocked with clear error if meals or bazar exist; suggest `LEFT` (AC 2.1.3).
 - [ ] `GET /api/mess` and `PATCH /api/mess` - view and update name, address, currency, `is_joinable`, `require_approval` (owner or manager).
 - [ ] Tests: permission matrix (owner, manager, member, outsider from another mess).
 
@@ -241,13 +243,13 @@ PRD module 7 and section 3.3. Needs Phases 2 and 3 complete.
   2. call model
   3. if tool calls: run via registry, append results, call model again
   4. cap loop at ~5 iterations, return final text plus any `proposals`
-- [ ] `POST /api/ai/chat` - body `{ messages, activeMonth }`, response `{ reply, proposals[] }`. Requires `requireActiveMember`.
+- [ ] `POST /api/ai/chat` - body `{ messages, activeMonth }`, response `{ reply, proposals[] }`. Requires an active membership, resolved by the service.
 - [ ] Timeouts, provider error mapping to clean 502/503 `AppError`.
 - [ ] Tests with `MockAdapter`: tool loop, iteration cap, provider failure.
 
 ### Dev B - Tools and guardrails
 - [ ] Tool registry: name, JSON schema (from Zod), handler, type (`read` | `simulate` | `proposal`).
-- [ ] Tools (all take `messId` and `memberId` from the request, never from the model):
+- [ ] Tools (all take the resolved active `messId` and `memberId`, never from the model):
   - `get_monthly_summary` -> summary service
   - `get_member_meals` -> meals service
   - `get_bazar_history` -> bazar service
@@ -287,13 +289,13 @@ Frontend can build: chat drawer, confirmation cards, handling `proposals[]`.
 | POST | `/api/mess` | auth | A | 1 |
 | POST | `/api/mess/join` | auth | A | 1 |
 | GET | `/api/mess/my` | auth | A | 1 |
-| POST | `/api/mess/switch` | auth | A | 1 |
 | GET / PATCH | `/api/mess` | member / manager | B | 1 |
 | GET | `/api/mess/members` | member | B | 1 |
 | GET | `/api/mess/members/pending` | manager | B | 1 |
 | PATCH | `/api/mess/members/:id/approve` | manager | B | 1 |
 | PATCH | `/api/mess/members/:id/reject` | manager | B | 1 |
-| PATCH | `/api/mess/members/:id/manager` | owner | B | 1 |
+| PATCH | `/api/mess/members/:id/manager` | manager / owner | B | 1 |
+| PATCH | `/api/mess/members/:id/owner` | owner | B | 1 |
 | POST | `/api/mess/leave` | member | B | 1 |
 | DELETE | `/api/mess/members/:id` | manager | B | 1 |
 | GET / POST | `/api/months` | member / manager | A | 2 |
@@ -316,7 +318,7 @@ Frontend can build: chat drawer, confirmation cards, handling `proposals[]`.
 | GET | `/api/dashboard?month=` | member | B | 3 |
 | POST | `/api/ai/chat` | member | A | 5 |
 
-All routes except auth and mess create/join/my/switch need `checkAuth + requireMess + requireActiveMember`.
+Every mess-scoped route needs `checkAuth`; the service then calls `requireActiveMembership(userId)` and adds `assertManager` / `assertOwner` where required.
 
 ---
 

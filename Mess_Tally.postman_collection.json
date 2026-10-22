@@ -258,6 +258,74 @@
 			]
 		},
 		{
+			"name": "Profile",
+			"item": [
+				{
+					"name": "Update Profile",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"bio\": \"Meal enthusiast and mess treasurer\",\n  \"phone\": \"+8801712345678\",\n  \"address\": \"Dhaka, Bangladesh\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/profile/update",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "profile", "update"]
+						},
+						"description": "Updates the authenticated user's profile information.\n\nAt least one of `bio`, `phone`, or `address` is required. All fields are optional and support empty strings for clearing existing values. Requires a valid access token and an active, email-verified account.\n\nThe route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Profile Image",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "profileImage",
+									"type": "file",
+									"src": "/Users/masadrayan/My Projects/Mess Tally/mess-tally-backend/postman/sample-profile.png"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/profile/image",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "profile", "image"]
+						},
+						"description": "Uploads or replaces the authenticated user's profile image.\n\nSend the image as `multipart/form-data` using the `profileImage` field. Only JPEG, PNG, and WebP images are accepted, with a maximum size of 5 MB. The previous Cloudinary image is deleted after a successful replacement.\n\n**Before sending, select an actual image file in the `profileImage` field.** If that field is left empty, Postman fails locally with `EISDIR: illegal operation on a directory, read` and the request never reaches the server. The request method must be `PATCH`.\n\nRequires a valid access token and an active, email-verified account. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "General",
 			"item": [
 				{

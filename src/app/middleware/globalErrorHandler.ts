@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import httpStatus from "http-status";
+import jwt from "jsonwebtoken";
+import multer from "multer";
 import { Prisma } from "../../generated/prisma/client";
 import config from "../config";
 import { AppError } from "../utils/AppError";
@@ -49,6 +51,20 @@ export const globalErrorHandler = async (
 	} else if (err instanceof AppError) {
 		errorMessage = err.message;
 		statusCode = err.statusCode;
+	} else if (err instanceof multer.MulterError) {
+		if (err.code === "LIMIT_FILE_SIZE") {
+			statusCode = httpStatus.REQUEST_ENTITY_TOO_LARGE;
+			errorMessage = "Image must be 5 MB or smaller";
+		} else {
+			statusCode = httpStatus.BAD_REQUEST;
+			errorMessage = err.message;
+		}
+	} else if (err instanceof jwt.TokenExpiredError) {
+		statusCode = httpStatus.UNAUTHORIZED;
+		errorMessage = "Your session has expired. Please log in again.";
+	} else if (err instanceof jwt.JsonWebTokenError) {
+		statusCode = httpStatus.UNAUTHORIZED;
+		errorMessage = "Invalid access token. Please log in again.";
 	} else if (err instanceof Error) {
 		errorMessage = err.message;
 	}

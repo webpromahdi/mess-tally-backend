@@ -5,11 +5,11 @@ import { AppError } from "../utils/AppError";
 import { catchAsync } from "../utils/catchAsync";
 
 export const validateRequest = (zodSchema: z.ZodObject) => {
-	return catchAsync((req: Request, res: Response, next: NextFunction) => {
+	return catchAsync(async (req: Request, res: Response, next: NextFunction) => {
 		// const payload = req.body ? req.body : {}
 		const payload = req.body ?? {};
 
-		const result = zodSchema.safeParse(payload);
+		const result = await zodSchema.safeParseAsync(payload);
 
 		if (!result.success) {
 			throw new AppError(

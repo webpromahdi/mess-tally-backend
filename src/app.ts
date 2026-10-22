@@ -10,8 +10,10 @@ import config from "./app/config";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
 import { AuthRoutes } from "./app/module/auth/auth.route";
+import { mealRoutes } from "./app/module/meal/meal.route";
 import { messRoutes } from "./app/module/mess/mess.route";
 import { messMemberRoutes } from "./app/module/messMember/member.route";
+import { monthRoutes } from "./app/module/messMonth/month.route";
 import { ProfileRoute } from "./app/module/profile/profile.route";
 
 const app: Application = express();
@@ -33,6 +35,8 @@ app.use(cookieParser());
 app.use("/api/v1/auth", AuthRoutes);
 app.use("/api/v1/mess", messRoutes);
 app.use("/api/v1/mess", messMemberRoutes);
+app.use("/api/v1/months", monthRoutes);
+app.use("/api/v1/meals", mealRoutes);
 app.use("/api/v1/profile", ProfileRoute);
 
 // Basic route

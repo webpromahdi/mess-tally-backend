@@ -59,10 +59,23 @@ const joinMess = catchAsync(async (req: Request, res: Response) => {
 		);
 	}
 
-	const { mess, membership } = await messService.joinMess(
-		user,
-		req.body as TJoinMess,
-	);
+	const { mess, membership, accessToken, refreshToken } =
+		await messService.joinMess(user, req.body as TJoinMess);
+
+	if (accessToken && refreshToken) {
+		res.cookie("accessToken", accessToken, {
+			httpOnly: true,
+			secure: config.node_env !== "development",
+			sameSite: config.node_env === "development" ? "lax" : "none",
+			maxAge: 1000 * 60 * 60 * 24, // 24 hour or 1 day
+		});
+		res.cookie("refreshToken", refreshToken, {
+			httpOnly: true,
+			secure: config.node_env !== "development",
+			sameSite: config.node_env === "development" ? "lax" : "none",
+			maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+		});
+	}
 
 	sendResponse(res, {
 		statusCode: httpStatus.CREATED,
@@ -74,6 +87,7 @@ const joinMess = catchAsync(async (req: Request, res: Response) => {
 		data: {
 			mess,
 			membership,
+			...(accessToken && refreshToken ? { accessToken, refreshToken } : {}),
 		},
 	});
 });

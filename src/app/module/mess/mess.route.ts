@@ -7,11 +7,6 @@ import { joinMessSchema } from "./mess.validations";
 const router = Router();
 
 router.post("/", auth(), messController.createMess);
-router.post(
-	"/join",
-	auth(),
-	validateRequest(joinMessSchema),
-	messController.joinMess,
-);
+router.post("/join",auth(), validateRequest(joinMessSchema),messController.joinMess);
 
 export const messRoutes = router;

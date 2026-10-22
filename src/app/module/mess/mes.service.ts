@@ -4,10 +4,9 @@ import {
 	MessRole,
 	Status,
 } from "../../../generated/prisma/enums";
-import config from "../../config";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
-import { jwtUtils } from "../../utils/jwt";
+import { createAuthTokens } from "../../utils/authToken";
 import type { IRequestUser } from "../auth/auth.interface";
 import type { ICreateMessPayload, IJoinMessPayload } from "./mess.interface";
 import Sqids from "sqids";
@@ -101,25 +100,12 @@ const createMess = async (user: IRequestUser, payload: ICreateMessPayload) => {
 		},
 	});
 
-	const jwtPayload = {
-		userId: existingUser.id,
+	const { accessToken, refreshToken } = await createAuthTokens({
+		id: existingUser.id,
 		name: existingUser.name,
 		email: existingUser.email,
 		role: existingUser.role,
-		messId: createdMess.id,
-	};
-
-	const accessToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_access_secret,
-		config.jwt_access_expires_in,
-	);
-
-	const refreshToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_refresh_secret,
-		config.jwt_refresh_expires_in,
-	);
+	});
 
 	return {
 		mess: createdMess,
@@ -210,6 +196,17 @@ const joinMess = async (user: IRequestUser, payload: IJoinMessPayload) => {
 			leftAt: null,
 		},
 	});
+
+	if (membership.status === MemberStatus.ACTIVE) {
+		const { accessToken, refreshToken } = await createAuthTokens({
+			id: user.userId,
+			name: user.name,
+			email: user.email,
+			role: user.role,
+		});
+
+		return { mess, membership, accessToken, refreshToken };
+	}
 
 	return { mess, membership };
 };

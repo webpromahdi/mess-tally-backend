@@ -12,6 +12,7 @@ import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import httpStatus from "http-status";
 import { Role, Status } from "../../../generated/prisma/enums";
+import { createAuthTokens } from "../../utils/authToken";
 import { jwtUtils } from "../../utils/jwt";
 import type { JwtPayload } from "jsonwebtoken";
 import { redisClient } from "../../lib/redis";
@@ -180,24 +181,12 @@ const verifyEmail = async (payload: IVerifyEmailPayload) => {
 	});
 
 	const { ...user } = createdUser;
-	const jwtPayload = {
-		userId: user.id,
+	const { accessToken, refreshToken } = await createAuthTokens({
+		id: user.id,
 		name: user.name,
 		email: user.email,
 		role: user.role,
-	};
-
-	const accessToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_access_secret,
-		config.jwt_access_expires_in,
-	);
-
-	const refreshToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_refresh_secret,
-		config.jwt_refresh_expires_in,
-	);
+	});
 
 	return {
 		user,
@@ -235,23 +224,12 @@ const loginUser = async (payload: ILoginUser) => {
 	if (!isPasswordMatched) {
 		throw new AppError(httpStatus.UNAUTHORIZED, "Invalid credentials");
 	}
-	const jwtPayload = {
-		userId: user.id,
+	const { accessToken, refreshToken } = await createAuthTokens({
+		id: user.id,
 		name: user.name,
 		email: user.email,
 		role: user.role,
-	};
-	const accessToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_access_secret,
-		config.jwt_access_expires_in,
-	);
-
-	const refreshToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_refresh_secret,
-		config.jwt_refresh_expires_in,
-	);
+	});
 
 	return {
 		accessToken,
@@ -307,24 +285,12 @@ const refreshToken = async (token: string) => {
 		);
 	}
 
-	const jwtPayload = {
-		userId: user.id,
+	const { accessToken, refreshToken } = await createAuthTokens({
+		id: user.id,
 		name: user.name,
 		email: user.email,
 		role: user.role,
-	};
-
-	const accessToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_access_secret,
-		config.jwt_access_expires_in,
-	);
-
-	const refreshToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_refresh_secret,
-		config.jwt_refresh_expires_in,
-	);
+	});
 
 	return {
 		accessToken,

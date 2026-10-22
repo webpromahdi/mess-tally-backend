@@ -16,6 +16,7 @@ declare global {
 				name: string;
 				userId: string;
 				role: Role;
+				messId?: string;
 			};
 		}
 	}
@@ -87,7 +88,7 @@ export const auth = (...requiredRoles: Role[]) => {
 				);
 			}
 
-			const { email, name, userId, role } = payload;
+			const { email, name, userId, role, messId } = payload;
 
 			if (!userId || !email || !name || !role) {
 				throw new AppError(
@@ -119,10 +120,10 @@ export const auth = (...requiredRoles: Role[]) => {
 				);
 			}
 
-			if (user.status === Status.SUSPENDED) {
+			if (user.isDeleted || user.status !== Status.ACTIVE) {
 				throw new AppError(
-					httpStatus.FORBIDDEN,
-					"Your account has been suspended. Please contact support.",
+					httpStatus.UNAUTHORIZED,
+					"User is inactive or not found. Please log in again.",
 				);
 			}
 
@@ -131,6 +132,7 @@ export const auth = (...requiredRoles: Role[]) => {
 				name,
 				userId,
 				role,
+				messId,
 			};
 
 			next();

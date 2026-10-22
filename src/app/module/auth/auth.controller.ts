@@ -8,6 +8,7 @@ import { AppError } from "../../utils/AppError";
 import type {
 	TLoginUser,
 	TRegisterUser,
+	TResendOtp,
 	TVerifyEmail,
 	TForgotPassword,
 	TResetPassword,
@@ -129,13 +130,26 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
 const forgotPassword = catchAsync(async (req: Request, res: Response) => {
 	const payload = req.body as TForgotPassword;
 
-	await authService.forgotPassword(payload);
+	const result = await authService.forgotPassword(payload);
 
 	sendResponse(res, {
 		statusCode: httpStatus.OK,
 		success: true,
 		message: "Password reset code sent to your email",
-		data: null,
+		data: result,
+	});
+});
+
+const resendOtp = catchAsync(async (req: Request, res: Response) => {
+	const payload = req.body as TResendOtp;
+
+	const result = await authService.resendOtp(payload);
+
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: "A new verification code has been sent to your email",
+		data: result,
 	});
 });
 
@@ -159,5 +173,6 @@ export const authController = {
 	getMe,
 	refreshToken,
 	forgotPassword,
+	resendOtp,
 	resetPassword,
 };

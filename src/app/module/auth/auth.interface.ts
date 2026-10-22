@@ -27,3 +27,8 @@ export interface IVerifyEmailPayload {
 	email: string;
 	otp: string;
 }
+export type TResendOtpPurpose = "REGISTRATION" | "FORGOT_PASSWORD";
+export interface IResendOtpPayload {
+	email: string;
+	purpose: TResendOtpPurpose;
+}

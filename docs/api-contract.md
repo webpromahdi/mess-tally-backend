@@ -1,4 +1,4 @@
-# MessTally API Contract — Phase 2 Dev A (Months and Meals)
+# MessTally API Contract
 
 Base URL: `{{baseUrl}}` (default `http://localhost:8000`)
 All routes below are mounted under `/api/v1`.
@@ -511,6 +511,97 @@ writable. `receivedById` never changes. Response `200`: `{ deposit }`.
 
 Manager only. Scoped by mess; `CLOSED` month → `409`.
 Response `200`: `{ id, deleted: true }`.
+
+## Summary
+
+Any `ACTIVE` member can read the monthly meal summary. This endpoint uses only
+`meal_entry` and `meal_expense`; utility bills and fund deposits are never
+included (AC 6.1.5).
+
+### `GET /api/v1/summary?month=YYYY-MM`
+
+`month` is optional and defaults to the current UTC month. A month with no
+`mess_month` row returns `200` with `month.exists = false`, zero totals, and the
+current ACTIVE members at zero; GET never creates a month. CLOSED months remain
+readable.
+
+Included members:
+
+- every `ACTIVE` member, even with no meals or bazar
+- every non-active member who has meal or bazar data in the month (normally a
+  `LEFT` member), so their balance is preserved and the settlement still sums
+  to zero
+- `LEFT` members with no data are excluded
+
+`guestMeals` count toward the member's total and the house total. Bazar Paid is
+the sum of trips where the member is the `shopperId` (not `addedById`).
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Summary fetched successfully",
+  "data": {
+    "month": {
+      "id": "uuid",
+      "name": "2026-10",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-31",
+      "status": "ACTIVE",
+      "exists": true
+    },
+    "canSettle": true,
+    "totals": {
+      "totalMeals": 30,
+      "totalBazar": 3000,
+      "mealRate": 100,
+      "totalPositiveBalance": 2000
+    },
+    "members": [
+      {
+        "memberId": "uuid",
+        "name": "Masad",
+        "avatarUrl": null,
+        "status": "ACTIVE",
+        "totalMeals": 10,
+        "mealCost": 1000,
+        "bazarPaid": 3000,
+        "mealBalance": 2000,
+        "balanceStatus": "RECEIVER"
+      }
+    ],
+    "settlement": [
+      {
+        "fromMemberId": "uuid",
+        "toMemberId": "uuid",
+        "amount": 2000
+      }
+    ]
+  }
+}
+```
+
+Rules:
+
+- `mealRate = totalBazar / totalMeals`, or `0` when `totalMeals = 0`.
+- `mealBalance = bazarPaid - mealCost`.
+- `balanceStatus` is `RECEIVER` when the balance is positive, `GIVER` when it
+  is negative, and `SETTLED` at zero.
+- Money values are rounded to 2 decimals only at the response boundary. Member
+  costs and balances are reconciled to paise so
+  `bazarPaid - mealCost = mealBalance` is exact and the settlement balances
+  exactly.
+- Do not recompute `mealCost` from the rounded `mealRate`; use the returned
+  `mealCost`.
+- `settlement` is ordered deterministically: largest debt first, largest credit
+  first, with member order as the tie-break.
+- The sum of all `settlement[].amount` equals `totals.totalPositiveBalance`, and
+  applying the transfers settles every member balance to zero.
+- If meals are `0` but bazar is positive, the formula produces only positive
+  balances and there is no giver. The response keeps those balances, returns
+  `canSettle: false` and an empty settlement list; it does not invent a payer.
+- A `CLOSED` month is read live in Phase 3. Phase 4 will return the locked
+  snapshot instead.
 
 ## Status code summary
 

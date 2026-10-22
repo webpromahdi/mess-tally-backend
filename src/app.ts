@@ -17,6 +17,7 @@ import { messRoutes } from "./app/module/mess/mess.route";
 import { messMemberRoutes } from "./app/module/messMember/member.route";
 import { monthRoutes } from "./app/module/messMonth/month.route";
 import { ProfileRoute } from "./app/module/profile/profile.route";
+import { summaryRoutes } from "./app/module/summary/summary.route";
 import { utilityRoutes } from "./app/module/utility/utility.route";
 
 const app: Application = express();
@@ -43,6 +44,7 @@ app.use("/api/v1/meals", mealRoutes);
 app.use("/api/v1/bazar", bazarRoutes);
 app.use("/api/v1/utilities/fund-deposits", depositRoutes);
 app.use("/api/v1/utilities", utilityRoutes);
+app.use("/api/v1/summary", summaryRoutes);
 app.use("/api/v1/profile", ProfileRoute);
 
 // Basic route

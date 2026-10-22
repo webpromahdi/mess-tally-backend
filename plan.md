@@ -3,7 +3,8 @@
 **Stack:** Express.js + TypeScript, Prisma + PostgreSQL, Passport JWT, Zod, Biome, Vercel
 **Team:** Dev A and Dev B (backend), Frontend 1 and Frontend 2 (frontend)
 **Source:** `prd.md`
-**Status:** Auth (login, JWT, `checkAuth`) is DONE.
+**Status:** Auth, mess/members, months, meals, bazar, utilities, fund deposits and the Phase 3 Dev A summary engine are implemented. Phase 2 is complete at the API level; seed/reset scripts and the broader automated test suite are still outstanding.
+**Progress snapshot (2026-10-23):** Phase 0 foundation is implemented except seed/reset; Phase 1 APIs are implemented except `GET/PATCH /api/mess`; Phase 2 (Months, Meals, Bazar, Utilities, Fund Deposits) is implemented and manually smoke-tested; Phase 3 Dev A (Summary Engine) is implemented and DB-smoke-tested. Phase 3 Dev B (utility fund/dashboard) is next.
 
 > Replace "Dev A" and "Dev B" with real names.
 
@@ -86,25 +87,26 @@ Defaults are proposed so we are not blocked. Confirm or change in the Phase 0 ca
 Goal: shared base so nobody blocks anybody.
 
 ### Dev A
-- [ ] Adopt the multi-file Prisma schema in `prisma/schema/` (one file per model: `user`, `profile`, `mess`, `mess-member`, `mess-month`, `meal-entry`, `meal-expense`, `utility-expense`, `deposit`, plus `mess-enums` and `base`). Set `"prisma": { "schema": "prisma/schema" }` in `package.json`.
-- [ ] Mess enums are `MessRole`, `MemberStatus`, `MessPlan`, `MonthStatus`, `UtilityCategory`, `UtilitySplitType`. The existing `Role` and `Status` enums on `User` are not touched.
-- [ ] Uncomment and use the `User.memberships` relation. Run `prisma validate`, then `migrate dev`.
-- [ ] Apply the CHECK constraints and one-OWNER index as a custom migration (`prisma/migrations/*_db_constraints/migration.sql`), since Prisma's schema language cannot express them.
+- [x] Adopt the multi-file Prisma schema in `prisma/schema/` (one file per model). Schema is selected in `prisma.config.ts` (`schema: 'prisma/schema'`) for Prisma 7.
+- [x] Mess enums are `MessRole`, `MemberStatus`, `MessPlan`, `MonthStatus`, `UtilityCategory`, `UtilitySplitType`. The existing `Role` and `Status` enums on `User` are not touched.
+- [x] Use the `User.memberships` relation. Migrations have been applied.
+- [x] Apply the CHECK constraints and one-OWNER index as a custom migration (`prisma/migrations/20261021173329_db_constraints/migration.sql`).
 - [ ] Write `seed.ts`: 1 mess, 5 members (1 owner-manager, 1 pending, 3 active), 1 active month, ~20 meal rows, 5 bazar rows, 4 bills, 3 deposits.
 - [ ] Add a reset script (`db:reset`). Mess deletion is not a feature this phase, so reset deletes in dependency order or truncates with CASCADE.
 
 ### Dev B
-- [ ] Confirm shared utilities exist: `validateRequest`, `apiResponse`, `AppError`, global error handler, `date.util.ts`.
-- [ ] Auth and scope helpers:
-  - `checkAuth` (exists) - identity only, no mess scope
-  - `mess.scope.ts` service helper - `requireActiveMembership(userId)` reads `user.activeMessId`, verifies the `mess_member` row is `ACTIVE`, returns the member + mess
-  - `assertManager(member)` / `assertOwner(member)` in the same helper
-- [ ] `month.util.ts`: `parseMonthParam("YYYY-MM")`, `monthRangeFromDate(date)`, UTC safe.
-- [ ] Write `docs/api-contract.md` (or OpenAPI) with all endpoints from section 12. Share with frontend.
-- [ ] Standard pagination and error code list (400, 401, 403, 404, 409).
+- [x] Confirm shared utilities exist: `validateRequest`, `sendResponse` (the `apiResponse` equivalent), `AppError`, global error handler, and UTC date helpers (`month.util.ts` / `dateSchema.ts`).
+- [x] Auth and scope helpers:
+  - [x] `checkAuth` - identity only, no mess scope
+  - [x] `mess.scope.ts` service helper - `requireActiveMembership(userId)` reads `user.activeMessId`, verifies the `mess_member` row is `ACTIVE`, returns the member + mess
+  - [x] `assertManager(member)` / `assertOwner(member)` in the same helper
+- [x] `month.util.ts`: `parseMonthParam("YYYY-MM")`, `monthRangeFromDate(date)`, UTC safe.
+- [x] Write `docs/api-contract.md` for the implemented modules. Phase 3-5 endpoints will be added when built.
+- [ ] Standard pagination and error code list (400, 401, 403, 404, 409). The error codes are documented; pagination is not implemented yet.
 
 ### Done when
 - Migration runs clean, seed runs, scope helpers unit-tested, contract doc shared.
+- Remaining: seed/reset scripts and automated unit tests. Scope helpers have been smoke-tested manually but do not have a test suite yet.
 
 ---
 
@@ -113,11 +115,11 @@ Goal: shared base so nobody blocks anybody.
 PRD modules 1.5 and 2. Everything else depends on an active mess, so this goes first.
 
 ### Dev A - Mess lifecycle
-- [ ] `POST /api/mess` - create mess, generate a unique `room_code` from the `mess_room_code_seq` sequence + sqids, create OWNER + `is_manager` + ACTIVE member and set `user.activeMessId` in one transaction, return 201 with the mess (AC 1.5.1.x).
-- [ ] `POST /api/mess/join` - find by `room_code` (404), reject if `is_joinable = false` (403), reject duplicate PENDING/ACTIVE (409), PENDING or ACTIVE depending on `require_approval`; set `user.activeMessId` when ACTIVE; LEFT or REJECTED users reuse their row (D10) (AC 1.5.2.x).
-- [ ] Tokens stay identity-only (`{ userId, name, email, role }`). Login and refresh return `activeMessId` (+ mess summary) read from the user row.
+- [x] `POST /api/mess` - create mess, generate a unique `room_code` from the `mess_room_code_seq` sequence + sqids, create OWNER + `is_manager` + ACTIVE member and set `user.activeMessId` in one transaction, return 201 with the mess (AC 1.5.1.x).
+- [x] `POST /api/mess/join` - find by `room_code` (404), reject if `is_joinable = false` (403), reject duplicate PENDING/ACTIVE (409), PENDING or ACTIVE depending on `require_approval`; set `user.activeMessId` when ACTIVE; LEFT or REJECTED users reuse their row (D10) (AC 1.5.2.x).
+- [x] Tokens stay identity-only (`{ userId, name, email, role }`). Login and refresh return `activeMessId` (+ mess summary) read from the user row.
 - [x] `GET /api/mess/my` - list the user's messes with role and status (for the mess picker). Response: `{ activeMessId, messes[] }`, `ACTIVE`/`PENDING`/`LEFT` only, `isActive` marks the verified pointer.
-- [ ] No switch endpoint; switching means leaving the current mess and joining another.
+- [x] No switch endpoint; switching means leaving the current mess and joining another.
 - [ ] Tests: create, join variants, active pointer set/clear, login with 0/1 active mess.
 
 ### Dev B - Members and settings
@@ -132,6 +134,8 @@ PRD modules 1.5 and 2. Everything else depends on an active mess, so this goes f
 - [ ] Tests: permission matrix (owner, manager, member, outsider from another mess).
 
 ### Sync point 1
+**Status: mostly complete.** Mess create/join, the mess picker and the members/approval flows are implemented. `GET/PATCH /api/mess` (mess settings) remains.
+
 Frontend can build: mess create/join, mess picker, members page, approval screen.
 
 ---
@@ -143,38 +147,42 @@ Month container plus the three raw-data modules. A and B work in parallel on sep
 ### Dev A - Months and Meals
 
 **Months** (`/api/months`)
-- [ ] `getOrCreateMonthByDate(messId, date)` service (decision D1). Name format `YYYY-MM`, `start_date`, `end_date` from `date.util`. **Dev B imports this in Bazar and Utilities, so ship it in the first 1-2 days.**
-- [ ] `GET /api/months` - list, newest first.
-- [ ] `POST /api/months` - manager opens a month explicitly.
-- [ ] `assertMonthWritable(month)` helper - throws 409 if CLOSED (decision D2).
+- [x] `getOrCreateMonthByDate(messId, date)` service (decision D1). Name format `YYYY-MM`, `start_date`, `end_date` from `date.util`. **Dev B imports this in Bazar and Utilities, so ship it in the first 1-2 days.**
+- [x] `GET /api/months` - list, newest first.
+- [x] `POST /api/months` - manager opens a month explicitly.
+- [x] `assertMonthWritable(month)` helper - throws 409 if CLOSED (decision D2).
 
 **Meals** (`/api/meals`)
-- [ ] `GET /api/meals?month=YYYY-MM` - grid data: all ACTIVE members x dates, plus per-member totals and house total (AC 3.1.1).
-- [ ] `PUT /api/meals` - upsert one cell `{ memberId, date, breakfast, lunch, dinner, guestMeals }`. Month derived from date (AC 3.1.2, 3.1.5).
-- [ ] `POST /api/meals/bulk` - upsert many rows in one transaction (for daily entry).
-- [ ] `DELETE /api/meals/:id`.
-- [ ] Zod: values >= 0, valid date, member must be ACTIVE and in same mess (AC 3.1.3).
-- [ ] Respect `is_locked`.
-- [ ] Tests: upsert idempotency, negative values, previous-month date, cross-mess member id.
+- [x] `GET /api/meals?month=YYYY-MM` - grid data: all ACTIVE members x dates, plus per-member totals and house total (AC 3.1.1).
+- [x] `PUT /api/meals` - upsert one cell `{ memberId, date, breakfast, lunch, dinner, guestMeals }`. Month derived from date (AC 3.1.2, 3.1.5).
+- [x] `POST /api/meals/bulk` - upsert many rows in one transaction (for daily entry).
+- [x] `DELETE /api/meals/:id`.
+- [x] Zod: values >= 0, valid date, member must be ACTIVE and in same mess (AC 3.1.3).
+- [x] Respect `is_locked`.
+- [ ] Tests: upsert idempotency, negative values, previous-month date, cross-mess member id. `docs/phase-2-dev-a-checklist.md` covers these as manual Postman checks; no automated suite yet.
 
 ### Dev B - Bazar, Utilities, Deposits
 
 **Bazar** (`/api/bazar`)
-- [ ] `GET /api/bazar?month=&shopperId=&from=&to=` - chronological list, per-shopper totals, house total (AC 4.1.2).
-- [ ] `POST`, `PATCH /:id`, `DELETE /:id` - amount > 0, shopper required and ACTIVE (AC 4.1.1, 4.1.4, 4.1.5).
-- [ ] `added_by_id` taken from `req.member`, never from body.
+- [x] `GET /api/bazar?month=&shopperId=&from=&to=` - chronological list, per-shopper totals, house total (AC 4.1.2).
+- [x] `POST`, `PATCH /:id`, `DELETE /:id` - amount > 0, shopper required and ACTIVE (AC 4.1.1, 4.1.4, 4.1.5).
+- [x] `added_by_id` taken from the authenticated member, never from body.
 
 **Utilities** (`/api/utilities`)
-- [ ] `GET /api/utilities?month=` - bills list, total, per-person share (formula U1, zero-member safe) (AC 5.1.2, 5.1.3).
-- [ ] `POST`, `PATCH /:id`, `DELETE /:id` - category enum, `split_type` default `EQUAL`, reject `CUSTOM_WEIGHT` for now (AC 5.1.5).
-- [ ] `PATCH /:id/paid` - set `is_paid`, `paid_at`, `paid_by_id`.
+- [x] `GET /api/utilities?month=` - bills list, total, per-person share (formula U1, zero-member safe) (AC 5.1.2, 5.1.3).
+- [x] `POST`, `PATCH /:id`, `DELETE /:id` - category enum, `split_type` default `EQUAL`, reject `CUSTOM_WEIGHT` for now (AC 5.1.5).
+- [x] `PATCH /:id/paid` - set `is_paid`, `paid_at`, `paid_by_id`.
 
 **Deposits** (`/api/utilities/fund-deposits`) - manager only
-- [ ] `GET` (by month), `POST` (member, amount > 0), `PATCH /:id`, `DELETE /:id` (AC 5.2.1).
-- [ ] `received_by_id` from `req.member`.
+- [x] `GET` (by month), `POST` (member, amount > 0), `PATCH /:id`, `DELETE /:id` (AC 5.2.1).
+- [x] `received_by_id` taken from the authenticated manager, never from body.
+- [x] Manual acceptance checklist: `docs/phase-2-dev-b-checklist.md`.
+- [x] DB-backed smoke checks for list/create/update/delete, paid/unpaid toggling, deposit create as manager, and closed-month `409`s. Test rows were cleaned up.
 
 ### Sync point 2
-Frontend can build: Meals grid (with optimistic updates), Bazar list/form, Utility bills and deposit forms. Summary and Dashboard still mocked.
+**Status: backend API complete.** Months, Meals, Bazar, Utilities and Fund Deposits are mounted in `src/app.ts`, documented in `docs/api-contract.md`, and covered by manual Postman checklists.
+
+Frontend can build: Meals grid (with optimistic updates), Bazar list/form, Utility bills and deposit forms. Summary is now real; Dashboard is still mocked.
 
 ---
 
@@ -182,19 +190,20 @@ Frontend can build: Meals grid (with optimistic updates), Bazar list/form, Utili
 
 The financial core. Dev A owns meal math, Dev B owns utility math and the dashboard that combines both.
 
-### Dev A - Summary engine (`/api/summary`)
-- [ ] `summaryCalculatorService` as **pure functions** (input: arrays of meals and bazar totals, output: numbers). Formulas 1 to 5:
+### Dev A - Summary engine (`/api/v1/summary`)
+- [x] `summaryCalculatorService` as **pure functions** (input: arrays of meals and bazar totals, output: numbers). Formulas 1 to 5:
   - total meals (includes `guest_meals`)
   - total bazar
   - meal rate (0 if no meals)
   - meal cost = meals x rate (full precision)
   - meal balance = bazar paid - meal cost
-- [ ] `summarySettlementService` as pure function: greedy match giver/receiver, `min(|giver|, receiver)`, loop until all within 0.01. Output list `{ fromMemberId, toMemberId, amount }` (AC 6.1.4).
-- [ ] Mark each member as `RECEIVER` / `GIVER` / `SETTLED` (AC 6.1.3).
-- [ ] `GET /api/summary?month=YYYY-MM` - thin wrapper that loads data, calls the pure functions, rounds to 2 decimals.
-- [ ] Only ACTIVE members count. For a member who LEFT mid-month and has data, include them if they have meals or bazar that month (so balances sum to zero). Document this rule.
-- [ ] Unit tests: zero meals, zero bazar, one member, all equal, odd cents (e.g. 100 / 3), many givers and one receiver, sum of transfers equals sum of positive balances within 0.01.
-- [ ] **Never import utility data here** (AC 6.1.5).
+- [x] `summarySettlementService` as pure function: greedy match giver/receiver, `min(|giver|, receiver)`, loop until settled. Uses integer paise so every transfer is exact at 2 decimals. Output list `{ fromMemberId, toMemberId, amount }` (AC 6.1.4).
+- [x] Mark each member as `RECEIVER` / `GIVER` / `SETTLED` (AC 6.1.3).
+- [x] `GET /api/v1/summary?month=YYYY-MM` - thin wrapper that loads data, calls the pure functions, rounds to 2 decimals.
+- [x] ACTIVE members are always included. Any non-active member with meals or bazar that month is also included, so LEFT members preserve their balance and the ledger sums to zero. Documented in `docs/api-contract.md`.
+- [ ] Unit tests: zero meals, zero bazar, one member, all equal, odd cents (e.g. 100 / 3), many givers and one receiver, sum of transfers equals sum of positive balances. Tests will live in a separate test folder, not inside module directories.
+- [x] **Never import utility data here** (AC 6.1.5). A DB smoke check confirms utility bills/deposits do not change the summary.
+- [x] `canSettle: false` when meals are zero but bazar is positive (no giver exists); the response keeps the real balances and returns an empty settlement rather than inventing a payer.
 
 ### Dev B - Utility fund and Dashboard
 - [ ] `utilityCalculatorService` as pure functions: share (U1), fund balance (U2), replenishment estimate (U3).
@@ -204,7 +213,17 @@ The financial core. Dev A owns meal math, Dev B owns utility math and the dashbo
 - [ ] Tests: AC 5.1.4 (changing a bill does not move the meal rate), fund balance negative, zero members.
 
 ### Sync point 3
-Frontend can wire real Summary and Dashboard. **Dev A publishes the calculator function signatures here, because Phase 5 reuses them.**
+**Status: Dev A complete.** `GET /api/v1/summary` is mounted and documented, with pure calculator/settlement functions and DB smoke checks. Dev B's Dashboard is still pending.
+
+Published signatures for Phase 5 reuse:
+
+```ts
+calculateMealRate(totalBazar: number, totalMeals: number): number
+calculateSummary(members: IMemberLedgerInput[]): ISummaryCalculation
+calculateSettlement(members: ISettlementMemberInput[]): ISettlementResult
+```
+
+Frontend can wire the real Summary page now. **Dev A publishes the calculator function signatures here, because Phase 5 reuses them.**
 
 ---
 
@@ -213,8 +232,8 @@ Frontend can wire real Summary and Dashboard. **Dev A publishes the calculator f
 ### Dev A
 - [ ] `PATCH /api/months/:id/close` - manager only. In one transaction: compute summary and utilities, store `locked_meal_rate`, `locked_total_meals`, `locked_total_bazar`, `locked_total_utilities` and the full `locked_snapshot` (summary + settlement JSON), set `closed_at`, `closed_by_id`, `status = CLOSED`, set `meal_entry.is_locked = true`.
 - [ ] `PATCH /api/months/:id/reopen` - manager only, clears locks (decision D2).
-- [ ] When a month is CLOSED, `GET /api/summary` returns the locked snapshot plus a flag `isLocked: true`.
-- [ ] `GET /api/summary/export?month=&format=csv|json` - member table, settlement list, totals. CSV with UTF-8 BOM so Excel opens Bangla names correctly.
+- [ ] When a month is CLOSED, `GET /api/v1/summary` returns the locked snapshot plus a flag `isLocked: true`.
+- [ ] `GET /api/v1/summary/export?month=&format=csv|json` - member table, settlement list, totals. CSV with UTF-8 BOM so Excel opens Bangla names correctly.
 - [ ] Tests: close, edit blocked after close (409), reopen, export content equals summary.
 
 ### Dev B

@@ -14,9 +14,10 @@ model Mess {
   updatedAt DateTime @updatedAt
 
   // Relations
-  members  MessMember[]
-  months   MessMonth[]
-  payments Payment[]
+  members     MessMember[]
+  months      MessMonth[]
+  payments    Payment[]
+  activeUsers User[]
 
   @@map("mess")
 }

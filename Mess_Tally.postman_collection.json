@@ -31,8 +31,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/register",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "auth", "register"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"register"
+							]
 						},
 						"description": "Stores the pending registration in Redis and emails a 6-digit OTP (valid for 5 minutes). The user is only created after Verify Email.\n\nIn development the OTP is also printed in the server console as `[dev] OTP <email> : <otp>`."
 					},
@@ -79,8 +86,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/verify-email",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "auth", "verify-email"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"verify-email"
+							]
 						},
 						"description": "Validates the registration OTP, creates the user, sends the welcome email, and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
 					},
@@ -127,8 +141,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/login",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "auth", "login"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
 						},
 						"description": "Logs in an active, email-verified user and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
 					},
@@ -147,8 +168,15 @@
 						],
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/me",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "auth", "me"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"me"
+							]
 						},
 						"description": "Returns the logged-in user's account and profile.\n\nRequires a valid access token, supplied either by the `accessToken` cookie set during Login / Verify Email or by the `Authorization: Bearer <token>` header. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
 					},
@@ -190,8 +218,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/refresh-token",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "auth", "refresh-token"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"refresh-token"
+							]
 						},
 						"description": "Issues a new access token and refresh token using the `refreshToken` httpOnly cookie.\n\nNo request body is required, and the controller does not read an Authorization header — run Login, Verify Email, or Create Mess first so Postman has the refresh cookie. The test script updates both collection variables with the new tokens."
 					},
@@ -219,8 +254,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/forgot-password",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "auth", "forgot-password"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"forgot-password"
+							]
 						},
 						"description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`.\n\nOnly active, email-verified, non-deleted users can request a reset. In development the OTP is printed in the server console.\n\nUse the received OTP with the Reset Password request."
 					},
@@ -248,8 +290,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/reset-password",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "auth", "reset-password"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"reset-password"
+							]
 						},
 						"description": "Verifies the password reset OTP sent by Forgot Password and updates the user's password.\n\nThe OTP must match `user-forgetPassword-otp:<email>` in Redis and expires after 5 minutes. It is deleted after a successful reset, so it can only be used once.\n\nA password-reset confirmation email is sent to the user after the password is updated."
 					},
@@ -286,8 +335,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/profile/update",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "profile", "update"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"profile",
+								"update"
+							]
 						},
 						"description": "Updates the authenticated user's profile information.\n\nAt least one of `bio`, `phone`, or `address` is required. All fields are optional and support empty strings for clearing existing values. Requires a valid access token and an active, email-verified account.\n\nThe route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
 					},
@@ -316,8 +372,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/profile/image",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "profile", "image"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"profile",
+								"image"
+							]
 						},
 						"description": "Uploads or replaces the authenticated user's profile image.\n\nSend the image as `multipart/form-data` using the `profileImage` field. Only JPEG, PNG, and WebP images are accepted, with a maximum size of 5 MB. The previous Cloudinary image is deleted after a successful replacement.\n\n**Before sending, select an actual image file in the `profileImage` field.** If that field is left empty, Postman fails locally with `EISDIR: illegal operation on a directory, read` and the request never reaches the server. The request method must be `PATCH`.\n\nRequires a valid access token and an active, email-verified account. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
 					},
@@ -338,18 +401,11 @@
 								"exec": [
 									"const body = pm.response.json();",
 									"",
-									"if (body && body.data) {",
-									"    if (body.data.mess) {",
-									"        pm.collectionVariables.set(\"messId\", body.data.mess.id);",
-									"        pm.collectionVariables.set(\"roomCode\", body.data.mess.roomCode);",
-									"        pm.collectionVariables.set(\"messName\", body.data.mess.name);",
-									"    }",
-									"    if (body.data.accessToken) {",
-									"        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
-									"    }",
-									"    if (body.data.refreshToken) {",
-									"        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
-									"    }",
+									"if (body && body.data && body.data.mess) {",
+									"    pm.collectionVariables.set(\"messId\", body.data.mess.id);",
+									"    pm.collectionVariables.set(\"activeMessId\", body.data.activeMessId);",
+									"    pm.collectionVariables.set(\"roomCode\", body.data.mess.roomCode);",
+									"    pm.collectionVariables.set(\"messName\", body.data.mess.name);",
 									"}"
 								]
 							}
@@ -378,10 +434,16 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/mess",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "mess"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess"
+							]
 						},
-						"description": "Creates a mess and makes the logged-in user its OWNER (also flagged as manager and ACTIVE). Protected by `auth()`, so any authenticated user can call it.\n\nOnly `name` is required; `address`, `currency`, `mealCutoffTime`, `isJoinable`, and `requireApproval` are optional. Server defaults: `currency` = \"BDT\", `mealCutoffTime` = \"11:00\", `isJoinable` = true, `requireApproval` = true.\n\nA user can only be ACTIVE in one mess: if the caller already has an ACTIVE membership, this returns `409 Conflict` and asks them to leave that mess first.\n\nThe server pulls the next integer from the `mess_room_code_seq` PostgreSQL sequence and encodes it with Sqids, prefixed by the first three letters of the mess name (e.g. \"Sunrise Mess\" -> `SUN-JEVTDKRA`). It responds with `201` and `{ mess, accessToken, refreshToken }`. The new tokens include `messId`, and the test script stores `accessToken`, `refreshToken`, `messId`, `roomCode`, and `messName` in collection variables.\n\nNote: this route has no Zod validation yet, so invalid types are only caught by the service/Prisma."
+						"description": "Creates a mess and makes the logged-in user its OWNER (also flagged as manager and ACTIVE). Protected by `auth()`, so any authenticated user can call it.\n\nOnly `name` is required; `address`, `currency`, `mealCutoffTime`, `isJoinable`, and `requireApproval` are optional. Server defaults: `currency` = \"BDT\", `mealCutoffTime` = \"11:00\", `isJoinable` = true, `requireApproval` = true.\n\nA user can only be ACTIVE in one mess: if the caller already has an ACTIVE membership, this returns `409 Conflict` and asks them to leave that mess first.\n\nThe server pulls the next integer from the `mess_room_code_seq` PostgreSQL sequence and encodes it with Sqids, prefixed by the first three letters of the mess name (e.g. \"Sunrise Mess\" -> `SUN-JEVTDKRA`). In one transaction it creates the mess, the OWNER membership, and sets `user.activeMessId`.\n\nResponds `201` with `{ mess, activeMessId }`. No tokens or cookies are issued here: tokens are identity-only and come from login/refresh. The test script stores `messId`, `activeMessId`, `roomCode`, and `messName`."
 					},
 					"response": []
 				},
@@ -402,6 +464,9 @@
 									"    if (body.data.membership) {",
 									"        pm.collectionVariables.set(\"membershipId\", body.data.membership.id);",
 									"        pm.collectionVariables.set(\"membershipStatus\", body.data.membership.status);",
+									"    }",
+									"    if (body.data.activeMessId) {",
+									"        pm.collectionVariables.set(\"activeMessId\", body.data.activeMessId);",
 									"    }",
 									"}"
 								]
@@ -431,10 +496,511 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/mess/join",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "mess", "join"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"join"
+							]
 						},
-						"description": "Joins an existing mess using its `roomCode` (case-insensitive, trimmed). Protected by `auth()`, with `validateRequest` enforcing that `roomCode` is present.\n\nResponds `201` with `{ mess, membership }`. The membership is `PENDING` when the mess has `requireApproval = true`, otherwise `ACTIVE`. Errors: `404` unknown room code, `403` when `isJoinable = false`, `409` when the user already has a `PENDING`/`ACTIVE` membership in this mess or is `ACTIVE` in another mess. A previous `LEFT` or `REJECTED` row is reused and reset to `MEMBER` with manager rights cleared.\n\nRun Create Mess first to populate `roomCode`, but use an account that is not ACTIVE in another mess: creating and joining with the same user returns `409`. The test script stores `joinedMessId`, `membershipId`, and `membershipStatus`."
+						"description": "Joins an existing mess using its `roomCode` (case-insensitive, trimmed). Protected by `auth()`, with `validateRequest` enforcing that `roomCode` is present.\n\nResponds `201` with `{ mess, membership, activeMessId }`. The membership is `PENDING` when the mess has `requireApproval = true` (then `activeMessId` is `null`), otherwise `ACTIVE` and `user.activeMessId` is set to this mess.\n\nNo tokens are issued here. Errors: `404` unknown room code, `403` when `isJoinable = false`, `409` when the user already has a `PENDING`/`ACTIVE` membership in this mess or is `ACTIVE` in another mess. A previous `LEFT` or `REJECTED` row is reused and reset to `MEMBER` with manager rights cleared.\n\nRun Create Mess first to populate `roomCode`, but use an account that is not ACTIVE in another mess. The test script stores `joinedMessId`, `membershipId`, `membershipStatus`, and `activeMessId`."
+					},
+					"response": []
+				},
+				{
+					"name": "My Messes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 with a mess list\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.messes).to.be.an(\"array\");",
+									"});",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.activeMessId) {",
+									"        pm.collectionVariables.set(\"activeMessId\", body.data.activeMessId);",
+									"    } else {",
+									"        pm.collectionVariables.unset(\"activeMessId\");",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/my",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"my"
+							]
+						},
+						"description": "Lists every mess the logged-in user belongs to, for the mess picker. Protected by `auth()` only: this endpoint must stay usable when the caller has no active mess, so it never calls `requireActiveMembership`.\n\nResponds `200` with `{ activeMessId, messes[] }`. Each row carries `membershipId`, `role`, `status`, `isManager`, `joinedAt`, `leftAt`, `isActive`, and a `mess` summary (`id`, `name`, `address`, `currency`, `roomCode`, `isJoinable`, `requireApproval`, `mealCutoffTime`).\n\nRows are `ACTIVE` first, then `PENDING`, then `LEFT` (newest first within each group); `REJECTED` is excluded. `isActive` marks the one mess pointed at by `user.activeMessId`, and `activeMessId` is `null` when that pointer is missing or stale (no matching `ACTIVE` membership), so the token/JWT is never trusted for scope.\n\nThe test script asserts the list shape and syncs `activeMessId` (or unsets it when null)."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Mess Members",
+			"item": [
+				{
+					"name": "List Members",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 with a member list\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.members).to.be.an(\"array\");",
+									"});",
+									"",
+									"if (body && body.data && body.data.members) {",
+									"    const target = body.data.members.find((member) => member.role !== \"OWNER\" && member.status === \"ACTIVE\");",
+									"    if (target) {",
+									"        pm.collectionVariables.set(\"memberId\", target.id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/members",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"members"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "ACTIVE",
+									"description": "Optional. Enable to return only rows with this status (PENDING | ACTIVE | LEFT | REJECTED). Leave disabled for the full member list.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Lists every `mess_member` row of the caller's active mess (all statuses by default), ordered ACTIVE -> PENDING -> LEFT -> REJECTED. Any ACTIVE member may call it.\n\nThe optional `?status=ACTIVE` filter is what the meals, bazar and utility dropdowns use (AC 2.1.2). An invalid status value returns `400`.\n\nResponds `200` with `{ members[], total }`. Each row has `id` (the `mess_member` id used by every other endpoint), `userId`, `name`, `email`, `avatarUrl`, `role`, `status`, `isManager`, `rentShare`, `fixedRentAmount`, `joinedAt`, and `leftAt`.\n\nThe test script stores the first ACTIVE non-owner member as `memberId`, which is the target used by Transfer Manager, Transfer Ownership and Remove Member."
+					},
+					"response": []
+				},
+				{
+					"name": "Pending Members",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 with a pending list\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.members).to.be.an(\"array\");",
+									"});",
+									"",
+									"if (body && body.data && body.data.members && body.data.members.length) {",
+									"    pm.collectionVariables.set(\"pendingMemberId\", body.data.members[0].id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/members/pending",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"members",
+								"pending"
+							]
+						},
+						"description": "Manager only (`is_manager = true`). Lists `PENDING` join requests for the caller's active mess, oldest first.\n\nResponds `200` with `{ members[], total }` in the same shape as List Members. A non-manager gets `403`, and so does a caller without a valid ACTIVE membership.\n\nThe test script stores the first request as `pendingMemberId`."
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 and member is ACTIVE\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.status).to.eql(\"ACTIVE\");",
+									"    pm.expect(body.data.isManager).to.eql(false);",
+									"});",
+									"",
+									"if (body && body.data && body.data.id) {",
+									"    pm.collectionVariables.set(\"memberId\", body.data.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/members/{{pendingMemberId}}/approve",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"members",
+								"{{pendingMemberId}}",
+								"approve"
+							]
+						},
+						"description": "Manager only. Moves a `PENDING` join request to `ACTIVE`, stamps `joinedAt`, and points `user.activeMessId` at this mess (PRD 2.1).\n\nScoped by mess: a member id from another mess returns `404`; a row that is not `PENDING` returns `409`. Because a user can be ACTIVE in only one mess (D14), approval is also rejected with `409` when the user has become active in another mess in the meantime.\n\nResponds `200` with the updated member row."
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 and member is REJECTED\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.status).to.eql(\"REJECTED\");",
+									"    pm.expect(body.data.isManager).to.eql(false);",
+									"});",
+									"",
+									"pm.collectionVariables.unset(\"pendingMemberId\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/members/{{pendingMemberId}}/reject",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"members",
+								"{{pendingMemberId}}",
+								"reject"
+							]
+						},
+						"description": "Manager only. Moves a `PENDING` join request to `REJECTED` and clears `isManager`. The row is kept (D10) so a later join reuses it; rejected rows are excluded from all calculations and dropdowns.\n\n`404` when the id is not in the caller's mess, `409` when the row is not `PENDING`. Responds `200` with the updated member row."
+					},
+					"response": []
+				},
+				{
+					"name": "Transfer Manager",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 and manager position transferred\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.isManager).to.eql(true);",
+									"    pm.expect(body.data.status).to.eql(\"ACTIVE\");",
+									"});",
+									"",
+									"if (body && body.data) {",
+									"    pm.collectionVariables.set(\"memberId\", body.data.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/members/{{memberId}}/manager",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"members",
+								"{{memberId}}",
+								"manager"
+							]
+						},
+						"description": "Transfers the manager position to the target ACTIVE member. The caller gives up `is_manager` and the target receives it, so a mess never has more than one manager. A manager can hand the position to another member; if the caller is the OWNER, `role` stays `OWNER` and only the manager flag moves. The OWNER can also call this when they no longer hold the flag, so a mess can never be stuck without a manager (for example after a manager leaves). Ownership itself is a separate action: `PATCH /api/mess/members/:id/owner`.\n\nNo request body is needed. The target must be an ACTIVE member of the caller's mess and cannot be the caller (`400`). Plain members get `403`, unknown or cross-mess ids `404`, non-active targets `409`. Responds `200` with the target row (`isManager: true`); refetch `GET /api/mess/members` to see the previous manager's row as `false`."
+					},
+					"response": []
+				},
+				{
+					"name": "Transfer Ownership",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 and ownership transferred\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.role).to.eql(\"OWNER\");",
+									"    pm.expect(body.data.isManager).to.eql(true);",
+									"});",
+									"",
+									"pm.sendRequest({",
+									"    url: pm.collectionVariables.get(\"baseUrl\") + \"/api/v1/mess/members\",",
+									"    method: \"GET\",",
+									"    header: {",
+									"        Authorization: \"Bearer \" + pm.collectionVariables.get(\"accessToken\")",
+									"    }",
+									"}, (error, response) => {",
+									"    pm.test(\"exactly one OWNER and one manager remain\", () => {",
+									"        pm.expect(error).to.be.null;",
+									"        pm.expect(response).to.have.status(200);",
+									"        const members = response.json().data.members;",
+									"        pm.expect(members.filter((member) => member.role === \"OWNER\")).to.have.length(1);",
+									"        pm.expect(members.filter((member) => member.isManager)).to.have.length(1);",
+									"    });",
+									"});",
+									"",
+									"if (body && body.data) {",
+									"    pm.collectionVariables.set(\"memberId\", body.data.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/members/{{memberId}}/owner",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"members",
+								"{{memberId}}",
+								"owner"
+							]
+						},
+						"description": "OWNER only. Moves the OWNER role to an ACTIVE member of the same mess: the target becomes `OWNER` with `isManager: true`, and the previous owner becomes a `MEMBER` with `isManager: false`, so exactly one owner and one manager remain. The current owner is demoted before the target is promoted so the `mess_member_one_owner_idx` partial unique index is never violated.\n\nRun this before `POST /api/mess/leave` when the mess still has other active members; leaving as the owner returns `409` until ownership is transferred. The target must be ACTIVE, in the same mess, and not the caller (`400`). A non-owner caller gets `403`, unknown or cross-mess ids `404`, non-active targets `409`. Responds `200` with the new owner's member row."
+					},
+					"response": []
+				},
+				{
+					"name": "Leave Mess",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 and pointer cleared\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.activeMessId).to.eql(null);",
+									"});",
+									"",
+									"pm.collectionVariables.unset(\"activeMessId\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/leave",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"leave"
+							]
+						},
+						"description": "Leaves the caller's active mess: sets `status = LEFT`, stamps `leftAt`, clears `isManager`, and nulls `user.activeMessId`. Switching messes means leaving and then joining another (D7).\n\nAn OWNER with other ACTIVE members must first transfer ownership with `PATCH /api/mess/members/:id/owner` (`409` otherwise); the last active member can always leave. Responds `200` with `{ messId, leftAt, activeMessId: null }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"pm.test(\"200 and member deleted\", () => {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(body.data.deleted).to.eql(true);",
+									"});",
+									"",
+									"pm.collectionVariables.unset(\"memberId\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/members/{{memberId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"mess",
+								"members",
+								"{{memberId}}"
+							]
+						},
+						"description": "Manager only hard delete, reserved for members with no records at all (AC 2.1.3). Blocked with `409` when meal entries, bazar, deposits, utility bills or payments reference the member; the message lists the counts and suggests setting `status = LEFT` instead (D12).\n\nThe owner cannot be removed (`403`) and a manager cannot remove themselves (`400`, use Leave). A member id from another mess returns `404`. Responds `200` with `{ id, deleted: true }`."
 					},
 					"response": []
 				}
@@ -451,8 +1017,12 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/",
-							"host": ["{{baseUrl}}"],
-							"path": [""]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
 						},
 						"description": "Basic health/welcome route. Returns `{ success: true, message: \"Welcome to MessTally\" }`."
 					},
@@ -504,6 +1074,16 @@
 		},
 		{
 			"key": "membershipStatus",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "memberId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "pendingMemberId",
 			"value": "",
 			"type": "string"
 		}

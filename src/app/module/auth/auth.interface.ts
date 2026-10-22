@@ -9,7 +9,6 @@ export interface IRequestUser {
 	email: string;
 	name: string;
 	role: Role;
-	messId?: string;
 }
 export interface IRegisterUser {
 	name: string;

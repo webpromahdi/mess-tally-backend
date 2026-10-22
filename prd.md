@@ -85,9 +85,8 @@ Every capability is explicitly tagged to distinguish current verified behavior f
 - **[New Feature]** Any authenticated user can create a new mess. Creating a mess automatically generates a unique `room_code` and creates an `OWNER` + `is_manager = true` `mess_member` record for the creator.
 - **[New Feature]** A user joins an existing mess by submitting a valid `room_code`. Their `mess_member` is created with `status = PENDING`. If `mess.require_approval = true`, a manager must approve the request before the member gains `ACTIVE` status and access to records.
 - **[New Feature]** If `mess.is_joinable = false`, new join requests are rejected outright.
-- **[New Feature]** After login, if a user belongs to more than one mess, they select their **active mess**. The selected `messId` is embedded in the JWT payload so every subsequent API request is automatically scoped to the correct mess.
-- **[New Feature]** If a user belongs to exactly one mess, that mess is selected automatically after login.
-- **[New Feature]** A user can switch their active mess from a settings screen, which triggers a token refresh with the new `messId`.
+- **[New Feature]** A user has at most one **active mess** at a time, stored on the user row as `active_mess_id` and returned by login, refresh and `GET /auth/me`. The JWT carries identity only; every mess-scoped service resolves the active mess from that pointer and verifies the `mess_member` row is `ACTIVE` before using it.
+- **[New Feature]** Creating a mess, joining one when no approval is required, and being approved all set `active_mess_id`; leaving clears it. Moving between messes means leaving the current one and joining another.
 
 **User Stories & Acceptance Criteria**
 
@@ -95,12 +94,12 @@ Every capability is explicitly tagged to distinguish current verified behavior f
 
 - **AC 1.5.1.1 (Pass/Fail):** `POST /api/mess` with a valid mess name returns HTTP 201 Created with the new mess record including a unique `room_code`.
 - **AC 1.5.1.2 (Pass/Fail):** The creator is automatically assigned an `OWNER` `mess_member` record with `is_manager = true` and `status = ACTIVE`.
-- **AC 1.5.1.3 (Pass/Fail):** The returned JWT encodes the newly created `messId` as the user's active mess.
+- **AC 1.5.1.3 (Pass/Fail):** Creating a mess sets the creator's `active_mess_id` to the new mess; the returned tokens remain identity-only.
 
 **User Story 1.5.2:** As a user, I want to join an existing mess using a room code so that I can participate in my household's shared records.
 
 - **AC 1.5.2.1 (Pass/Fail):** `POST /api/mess/join` with a valid `room_code` creates a `mess_member` with `status = PENDING` and returns HTTP 201 Created.
-- **AC 1.5.2.2 (Pass/Fail):** If `require_approval = false`, status is immediately set to `ACTIVE`.
+- **AC 1.5.2.2 (Pass/Fail):** If `require_approval = false`, status is immediately set to `ACTIVE` and the user's `active_mess_id` is set to that mess.
 - **AC 1.5.2.3 (Pass/Fail):** Submitting an invalid `room_code` returns HTTP 404 Not Found.
 - **AC 1.5.2.4 (Pass/Fail):** A user who is already a member of the same mess cannot join it again (HTTP 409 Conflict).
 - **AC 1.5.2.5 (Pass/Fail):** Joining a mess where `is_joinable = false` is rejected with HTTP 403 Forbidden.
@@ -110,10 +109,12 @@ Every capability is explicitly tagged to distinguish current verified behavior f
 - **AC 1.5.3.1 (Pass/Fail):** `PATCH /api/mess/members/:id/approve` sets `status = ACTIVE`; only a member with `is_manager = true` can call this endpoint.
 - **AC 1.5.3.2 (Pass/Fail):** `PATCH /api/mess/members/:id/reject` sets `status = REJECTED`; the rejected user is excluded from all calculations.
 
-**User Story 1.5.4:** As a user who belongs to multiple messes, I want my JWT to carry my active mess so that all API calls are automatically scoped to the correct house.
+**User Story 1.5.4:** As a member, I want the backend to know which mess my requests belong to so that I do not have to send a mess id with every call.
 
-- **AC 1.5.4.1 (Pass/Fail):** The JWT payload includes a `messId` claim representing the user's currently active mess.
-- **AC 1.5.4.2 (Pass/Fail):** Switching the active mess issues a refreshed token with the updated `messId`; all subsequent requests use the new scope.
+- **AC 1.5.4.1 (Pass/Fail):** The JWT payload is identity-only (`userId`, `name`, `email`, `role`); it contains no `messId` claim.
+- **AC 1.5.4.2 (Pass/Fail):** Mess-scoped services resolve the active mess from `user.active_mess_id` and reject the request with HTTP 403 when there is no valid `ACTIVE` membership.
+- **AC 1.5.4.3 (Pass/Fail):** Login, refresh and `GET /auth/me` include `activeMessId` (null when the user has no active mess).
+- **AC 1.5.4.4 (Pass/Fail):** `GET /api/mess/my` lists the caller's memberships with role, status, and `isActive`; `REJECTED` rows are excluded and `activeMessId` is only returned when it still matches an `ACTIVE` membership.
 
 ---
 
@@ -123,7 +124,7 @@ Every capability is explicitly tagged to distinguish current verified behavior f
 
 - **[Existing Functionality]** Maintains the directory of flatmates (`mess_member`) belonging to a mess. Only members with `status = ACTIVE` are included in meal counts, utility share calculations, and settlement.
 - **[Existing Functionality]** Every meal entry, bazar shopping record, and utility deposit is relationally linked to a `mess_member` record.
-- **[New Feature]** Members transition through statuses: `PENDING` → `ACTIVE` (on manager approval) → `LEFT` (on voluntary leave). `REJECTED` members have no access.
+- **[New Feature]** Members transition through statuses: `PENDING` → `ACTIVE` (on manager approval) → `LEFT` (on voluntary leave). `REJECTED` members have no access. Approving sets the user's `active_mess_id`; leaving clears it.
 - **[Planned Enhancement]** Manage directory fetching and mutations via TanStack Query so approving or deactivating a member automatically invalidates and refreshes dependent meal sheets, bazar dropdowns, and summary calculations.
 - **[Planned Enhancement]** Prevent deletion of members who already have logged meals or bazar transactions; use `status = LEFT` for soft-archiving instead.
 
@@ -463,7 +464,7 @@ The AI Assistant interacts with MessTally exclusively through registered Express
 
 | Table | Key Columns | Purpose |
 |---|---|---|
-| `users` | `id` (TEXT), `email`, `password_hash`, `name`, `phone`, `avatar_url`, `created_at`, `updated_at` | Login accounts. One user can be a member of multiple messes through separate `mess_member` rows. |
+| `users` | `id` (TEXT), `email`, `password_hash`, `name`, `phone`, `avatar_url`, `active_mess_id` (nullable FK → `mess`), `created_at`, `updated_at` | Login accounts. `active_mess_id` points at the user's single active mess and is verified against an `ACTIVE` `mess_member` row on every mess-scoped request. |
 | `mess` | `id` (TEXT), `name`, `address`, `currency`, `room_code` (unique), `is_joinable`, `require_approval`, `plan` (`FREE`\|`PRO`), `plan_expires_at`, `meal_cutoff_time`, `created_at`, `updated_at` | Top-level tenant container. `room_code` is the invite code. All accounting records are scoped to a `mess_id`. |
 | `mess_member` | `id` (TEXT), `user_id`, `mess_id`, `role` (`OWNER`\|`MEMBER`), `status` (`PENDING`\|`ACTIVE`\|`LEFT`\|`REJECTED`), `is_manager` (BOOLEAN), `rent_share`, `fixed_rent_amount`, `joined_at`, `left_at`, `updated_at` | Flatmate directory entry. `status = ACTIVE` is required for inclusion in all calculations. `is_manager = true` grants manager-level write access. Unique on `(user_id, mess_id)`. |
 | `mess_month` | `id` (TEXT), `mess_id`, `name`, `start_date`, `end_date`, `status` (`ACTIVE`\|`CLOSED`), `manager_id`, `locked_meal_rate`, `locked_total_meals`, `locked_total_bazar`, `locked_total_utilities`, `created_at`, `updated_at` | Represents one calendar month of activity. All meal entries, bazar expenses, utility bills, and deposits are scoped to a `mess_month`. `manager_id` → `mess_member`. |

@@ -5,7 +5,6 @@ import httpStatus from "http-status";
 import { authService } from "./auth.service";
 import config from "../../config";
 import { AppError } from "../../utils/AppError";
-import { IRequestUser } from "./auth.interface";
 import type {
 	TLoginUser,
 	TRegisterUser,
@@ -57,7 +56,8 @@ const verifyEmail = catchAsync(async (req: Request, res: Response) => {
 });
 const loginUser = catchAsync(async (req: Request, res: Response) => {
 	const payload = req.body as TLoginUser;
-	const { accessToken, refreshToken } = await authService.loginUser(payload);
+	const result = await authService.loginUser(payload);
+	const { accessToken, refreshToken } = result;
 	res.cookie("accessToken", accessToken, {
 		httpOnly: true,
 		secure: config.node_env === "development" ? false : true,
@@ -74,10 +74,7 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
 		statusCode: httpStatus.OK,
 		success: true,
 		message: "User logged in successfully",
-		data: {
-			accessToken,
-			refreshToken,
-		},
+		data: result,
 	});
 });
 const getMe = catchAsync(async (req: Request, res: Response) => {
@@ -125,10 +122,7 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
 		statusCode: httpStatus.OK,
 		success: true,
 		message: "New tokens generated successfully",
-		data: {
-			accessToken,
-			refreshToken: newRefreshToken,
-		},
+		data: result,
 	});
 });
 

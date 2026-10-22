@@ -21,6 +21,31 @@ import path from "path";
 import ejs from "ejs";
 import { transporter } from "../../lib/nodemailer";
 
+const activeMessSelect = {
+	id: true,
+	name: true,
+	roomCode: true,
+	currency: true,
+	isJoinable: true,
+	requireApproval: true,
+	mealCutoffTime: true,
+};
+
+/**
+ * Active mess is resolved from `user.activeMessId`, not from the JWT.
+ * Returns null when the user has no active mess.
+ */
+const getActiveMess = async (activeMessId: string | null) => {
+	if (!activeMessId) {
+		return null;
+	}
+
+	return prisma.mess.findUnique({
+		where: { id: activeMessId },
+		select: activeMessSelect,
+	});
+};
+
 const registerUser = async (payload: IRegisterUser) => {
 	const { name, password } = payload;
 
@@ -231,9 +256,13 @@ const loginUser = async (payload: ILoginUser) => {
 		role: user.role,
 	});
 
+	const mess = await getActiveMess(user.activeMessId);
+
 	return {
 		accessToken,
 		refreshToken,
+		activeMessId: user.activeMessId,
+		mess,
 	};
 };
 const getMe = async (user: IRequestUser) => {
@@ -292,9 +321,13 @@ const refreshToken = async (token: string) => {
 		role: user.role,
 	});
 
+	const mess = await getActiveMess(user.activeMessId);
+
 	return {
 		accessToken,
 		refreshToken,
+		activeMessId: user.activeMessId,
+		mess,
 	};
 };
 

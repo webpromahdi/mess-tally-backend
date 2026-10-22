@@ -9,12 +9,15 @@ model User {
   isDeleted     Boolean   @default(false)
   deletedAt     DateTime?
 
+  activeMessId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   profile   profile?
 
   // Relations
   memberships MessMember[]
+  activeMess  Mess?        @relation(fields: [activeMessId], references: [id], onDelete: SetNull)
 }
 
 model profile {

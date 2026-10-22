@@ -16,7 +16,6 @@ declare global {
 				name: string;
 				userId: string;
 				role: Role;
-				messId?: string;
 			};
 		}
 	}
@@ -88,7 +87,7 @@ export const auth = (...requiredRoles: Role[]) => {
 				);
 			}
 
-			const { email, name, userId, role, messId } = payload;
+			const { email, name, userId, role } = payload;
 
 			if (!userId || !email || !name || !role) {
 				throw new AppError(
@@ -132,7 +131,6 @@ export const auth = (...requiredRoles: Role[]) => {
 				name,
 				userId,
 				role,
-				messId,
 			};
 
 			next();

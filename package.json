@@ -34,6 +34,7 @@
         "nodemailer": "^10.1.7",
         "pg": "^8.22.0",
         "redis": "^6.3.0",
+        "sqids": "^0.3.0",
         "zod": "^4.6.7"
     },
     "devDependencies": {

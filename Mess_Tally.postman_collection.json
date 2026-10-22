@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
 		"name": "Mess_Tally",
-		"description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login and Verify Email save the returned tokens into collection variables and also set the httpOnly cookies.\n\n`Get Me` accepts the access token either from the cookie jar or via the `Authorization: Bearer {{accessToken}}` header. `Refresh Token` reads the `refreshToken` httpOnly cookie, so it must run after Login or Verify Email in the same Postman session.",
+		"description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app: `/api/v1/auth`, `/api/v1/mess`, and the root health route.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login, Verify Email, Refresh Token, and Create Mess save the returned tokens into collection variables and also set the httpOnly cookies. Join Mess stores the joined mess and membership ids in collection variables.\n\nProtected routes accept the access token either from the cookie jar or via the `Authorization: Bearer {{accessToken}}` header. `Refresh Token` reads the `refreshToken` httpOnly cookie, so it must run after Login, Verify Email, or Create Mess in the same Postman session.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -193,7 +193,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "v1", "auth", "refresh-token"]
 						},
-						"description": "Issues a new access token and refresh token using the `refreshToken` httpOnly cookie.\n\nNo request body is required, and the controller does not read an Authorization header — run Login or Verify Email first so Postman has the refresh cookie. The test script updates both collection variables with the new tokens."
+						"description": "Issues a new access token and refresh token using the `refreshToken` httpOnly cookie.\n\nNo request body is required, and the controller does not read an Authorization header — run Login, Verify Email, or Create Mess first so Postman has the refresh cookie. The test script updates both collection variables with the new tokens."
 					},
 					"response": []
 				},
@@ -326,6 +326,121 @@
 			]
 		},
 		{
+			"name": "Mess",
+			"item": [
+				{
+					"name": "Create Mess",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.mess) {",
+									"        pm.collectionVariables.set(\"messId\", body.data.mess.id);",
+									"        pm.collectionVariables.set(\"roomCode\", body.data.mess.roomCode);",
+									"        pm.collectionVariables.set(\"messName\", body.data.mess.name);",
+									"    }",
+									"    if (body.data.accessToken) {",
+									"        pm.collectionVariables.set(\"accessToken\", body.data.accessToken);",
+									"    }",
+									"    if (body.data.refreshToken) {",
+									"        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Sunrise Mess\",\n  \"address\": \"House 12, Road 3, Dhanmondi, Dhaka\",\n  \"currency\": \"BDT\",\n  \"mealCutoffTime\": \"11:00\",\n  \"isJoinable\": true,\n  \"requireApproval\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "mess"]
+						},
+						"description": "Creates a mess and makes the logged-in user its OWNER (also flagged as manager and ACTIVE). Protected by `auth()`, so any authenticated user can call it.\n\nOnly `name` is required; `address`, `currency`, `mealCutoffTime`, `isJoinable`, and `requireApproval` are optional. Server defaults: `currency` = \"BDT\", `mealCutoffTime` = \"11:00\", `isJoinable` = true, `requireApproval` = true.\n\nA user can only be ACTIVE in one mess: if the caller already has an ACTIVE membership, this returns `409 Conflict` and asks them to leave that mess first.\n\nThe server pulls the next integer from the `mess_room_code_seq` PostgreSQL sequence and encodes it with Sqids, prefixed by the first three letters of the mess name (e.g. \"Sunrise Mess\" -> `SUN-JEVTDKRA`). It responds with `201` and `{ mess, accessToken, refreshToken }`. The new tokens include `messId`, and the test script stores `accessToken`, `refreshToken`, `messId`, `roomCode`, and `messName` in collection variables.\n\nNote: this route has no Zod validation yet, so invalid types are only caught by the service/Prisma."
+					},
+					"response": []
+				},
+				{
+					"name": "Join Mess",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.mess) {",
+									"        pm.collectionVariables.set(\"joinedMessId\", body.data.mess.id);",
+									"    }",
+									"    if (body.data.membership) {",
+									"        pm.collectionVariables.set(\"membershipId\", body.data.membership.id);",
+									"        pm.collectionVariables.set(\"membershipStatus\", body.data.membership.status);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomCode\": \"{{roomCode}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/mess/join",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "mess", "join"]
+						},
+						"description": "Joins an existing mess using its `roomCode` (case-insensitive, trimmed). Protected by `auth()`, with `validateRequest` enforcing that `roomCode` is present.\n\nResponds `201` with `{ mess, membership }`. The membership is `PENDING` when the mess has `requireApproval = true`, otherwise `ACTIVE`. Errors: `404` unknown room code, `403` when `isJoinable = false`, `409` when the user already has a `PENDING`/`ACTIVE` membership in this mess or is `ACTIVE` in another mess. A previous `LEFT` or `REJECTED` row is reused and reset to `MEMBER` with manager rights cleared.\n\nRun Create Mess first to populate `roomCode`, but use an account that is not ACTIVE in another mess: creating and joining with the same user returns `409`. The test script stores `joinedMessId`, `membershipId`, and `membershipStatus`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "General",
 			"item": [
 				{
@@ -359,6 +474,36 @@
 		},
 		{
 			"key": "refreshToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "messId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "roomCode",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "messName",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "joinedMessId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "membershipId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "membershipStatus",
 			"value": "",
 			"type": "string"
 		}

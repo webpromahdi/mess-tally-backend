@@ -7,8 +7,21 @@ import { Role } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-router.post("/", auth(Role.USER), messController.createMess);
-router.get("/my", auth(Role.USER), messController.getMyMesses);
-router.post("/join",auth(Role.USER),validateRequest(joinMessSchema),messController.joinMess,);
+router.post(
+	"/",
+	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
+	messController.createMess,
+);
+router.get(
+	"/my",
+	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
+	messController.getMyMesses,
+);
+router.post(
+	"/join",
+	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
+	validateRequest(joinMessSchema),
+	messController.joinMess,
+);
 
 export const messRoutes = router;

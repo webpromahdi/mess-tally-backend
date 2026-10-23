@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
 		"name": "Mess_Tally",
-		"description": "Postman collection for the MessTally backend. It mirrors every route currently mounted in `src/app.ts`: `/api/v1/auth`, `/api/v1/profile`, `/api/v1/mess` (including the `/mess/members` and `/mess/leave` routes), `/api/v1/months`, `/api/v1/meals`, `/api/v1/bazar`, the utilities and utility fund deposit routes, `/api/v1/summary`, and the root health route. Planned modules that are not mounted yet (dashboard, AI) are intentionally absent.\n\nBase URL comes from the `baseUrl` collection variable (default `http://localhost:8000`, matching `PORT` in `.env`).\n\nAuth flow: Register sends an OTP, Verify Email creates the user and returns tokens, and Login/Refresh Token return a fresh token pair. Login, Verify Email, and Refresh Token set the `accessToken` and `refreshToken` httpOnly cookies; the Login and Refresh Token test scripts also copy the tokens plus `activeMessId`/`mess` into collection variables.\n\nMess scope: tokens carry identity only (`userId`, `name`, `email`, `role`). There is no `messId` claim and no mess-switch endpoint. The server reads `user.activeMessId`, verifies the matching `mess_member` row is `ACTIVE`, and only then runs the mess-scoped action. Create Mess, Join Mess, and Approve Member maintain that pointer; Leave Mess and Remove Member clear it.\n\nProtected requests accept the access token from the cookie jar or from the `Authorization: Bearer {{accessToken}}` header. Create Mess, Join Mess, and My Messes require `Role.USER`; the other protected routes accept any authenticated role, but mess-scoped actions still need a valid ACTIVE membership. `Refresh Token` reads the `refreshToken` httpOnly cookie, so run Login or Verify Email earlier in the same Postman session.",
+		"description": "Postman collection for the MessTally backend. It mirrors every route currently mounted in `src/app.ts`: `/api/v1/auth`, `/api/v1/profile`, `/api/v1/mess` (including the `/mess/members` and `/mess/leave` routes), `/api/v1/months`, `/api/v1/meals`, `/api/v1/bazar`, the utilities and utility fund deposit routes, `/api/v1/summary`, `/api/v1/dashboard`, and the root health route. Planned AI routes are intentionally absent.\n\nBase URL comes from the `baseUrl` collection variable (default `http://localhost:8000`, matching `PORT` in `.env`).\n\nAuth flow: Register sends an OTP, Verify Email creates the user and returns tokens, and Login/Refresh Token return a fresh token pair. Login, Verify Email, and Refresh Token set the `accessToken` and `refreshToken` httpOnly cookies; the Login and Refresh Token test scripts also copy the tokens plus `activeMessId`/`mess` into collection variables.\n\nMess scope: tokens carry identity only (`userId`, `name`, `email`, `role`). There is no `messId` claim and no mess-switch endpoint. The server reads `user.activeMessId`, verifies the matching `mess_member` row is `ACTIVE`, and only then runs the mess-scoped action. Create Mess, Join Mess, and Approve Member maintain that pointer; Leave Mess and Remove Member clear it.\n\nProtected requests accept the access token from the cookie jar or from the `Authorization: Bearer {{accessToken}}` header. Create Mess, Join Mess, and My Messes require `Role.USER`; the other protected routes accept any authenticated role, but mess-scoped actions still need a valid ACTIVE membership. `Refresh Token` reads the `refreshToken` httpOnly cookie, so run Login or Verify Email earlier in the same Postman session.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -1399,6 +1399,52 @@
 			]
 		},
 		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Get Dashboard",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.month && body.data.month.name) {",
+									"    pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/dashboard?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dashboard"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Quick-view Dashboard for any ACTIVE member. `?month=YYYY-MM` is optional and defaults to the current UTC month. The `meal` block is the Summary totals plus the caller's own member row, so it matches `GET /api/v1/summary` exactly. The `utility` block is the Utility Fund summary, so it matches `GET /api/v1/utilities/fund` exactly. `pendingMemberCount` is the PENDING member count for managers and `null` for non-managers. No settlement list is returned. GET never creates a month; an empty month returns zero meal and fund values."
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "Bazar",
 			"item": [
 				{
@@ -1831,6 +1877,76 @@
 							]
 						},
 						"description": "Deletes one utility bill. Scoped by id AND the caller's mess (`404` cross-mess). A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Utility Fund",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.month && body.data.month.name) {",
+									"    pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Returns the Utility Fund card for any ACTIVE member (AC 5.2.2, AC 5.2.3). `?month=YYYY-MM` is optional and defaults to the current UTC month. `totalDeposits` sums all deposits; `totalPaidBills` sums only bills where `isPaid = true`; `balance = totalDeposits - totalPaidBills`; `needsReplenishment` is true when the balance is `<= 0`, including an empty month. GET never creates a month. Utility data never affects meal rate, meal balances or settlement."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Replenishment Estimate",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/replenishment-estimate?perMember=500",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"replenishment-estimate"
+							],
+							"query": [
+								{
+									"key": "perMember",
+									"value": "500"
+								}
+							]
+						},
+						"description": "Manager only. Formula U3: `totalExpected = round2(perMember × count of ACTIVE members)`. `perMember` is required, greater than 0, and at most two decimal places. Zero active members returns `0`. This endpoint does not subtract the current fund balance."
 					},
 					"response": []
 				}

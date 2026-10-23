@@ -5,7 +5,11 @@ import { catchAsync } from "../../utils/catchAsync";
 import { sendResponse } from "../../utils/sendResponse";
 import type { IRequestUser } from "../auth/auth.interface";
 import { utilityService } from "./utility.service";
-import { utilityListQuerySchema } from "./utility.validation";
+import {
+	replenishmentEstimateQuerySchema,
+	utilityFundQuerySchema,
+	utilityListQuerySchema,
+} from "./utility.validation";
 
 const getUser = (req: Request): IRequestUser => {
 	if (!req.user) {
@@ -34,6 +38,45 @@ const listUtilities = catchAsync(async (req: Request, res: Response) => {
 		data: result,
 	});
 });
+
+const getUtilityFund = catchAsync(async (req: Request, res: Response) => {
+	const query = utilityFundQuerySchema.safeParse(req.query);
+
+	if (!query.success) {
+		throw new AppError(httpStatus.BAD_REQUEST, query.error.issues[0].message);
+	}
+
+	const result = await utilityService.getUtilityFund(getUser(req), query.data);
+
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: "Utility fund fetched successfully",
+		data: result,
+	});
+});
+
+const getReplenishmentEstimate = catchAsync(
+	async (req: Request, res: Response) => {
+		const query = replenishmentEstimateQuerySchema.safeParse(req.query);
+
+		if (!query.success) {
+			throw new AppError(httpStatus.BAD_REQUEST, query.error.issues[0].message);
+		}
+
+		const result = await utilityService.getReplenishmentEstimate(
+			getUser(req),
+			query.data,
+		);
+
+		sendResponse(res, {
+			statusCode: httpStatus.OK,
+			success: true,
+			message: "Replenishment estimate calculated successfully",
+			data: result,
+		});
+	},
+);
 
 const createUtility = catchAsync(async (req: Request, res: Response) => {
 	const result = await utilityService.createUtility(getUser(req), req.body);
@@ -94,6 +137,8 @@ const deleteUtility = catchAsync(async (req: Request, res: Response) => {
 
 export const utilityController = {
 	listUtilities,
+	getUtilityFund,
+	getReplenishmentEstimate,
 	createUtility,
 	updateUtility,
 	setUtilityPaid,

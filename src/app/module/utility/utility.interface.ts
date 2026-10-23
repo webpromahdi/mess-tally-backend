@@ -41,6 +41,20 @@ export interface IUtilityBillResult {
 	bill: IUtilityBill;
 }
 
+export interface IUtilityFundSummary {
+	month: IMonthContext;
+	totalDeposits: number;
+	totalPaidBills: number;
+	balance: number;
+	needsReplenishment: boolean;
+}
+
+export interface IReplenishmentEstimate {
+	perMember: number;
+	activeMemberCount: number;
+	totalExpected: number;
+}
+
 export interface IDeleteUtilityResult {
 	id: string;
 	deleted: true;

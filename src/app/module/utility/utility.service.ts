@@ -10,7 +10,7 @@ import { AppError } from "../../utils/AppError";
 import { toMoney } from "../../utils/money";
 import { normalizeOptionalText } from "../../utils/text";
 import type { IRequestUser } from "../auth/auth.interface";
-import { requireActiveMembership } from "../mess/mess.scope";
+import { assertManager, requireActiveMembership } from "../mess/mess.scope";
 import {
 	assertMonthWritable,
 	getOrCreateMonthByDate,
@@ -22,16 +22,24 @@ import {
 	parseMonthParam,
 	round2,
 } from "../messMonth/month.util";
-import { calculateUtilityShare } from "./utility.calculator";
+import {
+	calculateReplenishmentEstimate,
+	calculateUtilityFundBalance,
+	calculateUtilityShare,
+} from "./utility.calculator";
 import type {
 	IDeleteUtilityResult,
+	IReplenishmentEstimate,
 	IUtilityBill,
 	IUtilityBillResult,
+	IUtilityFundSummary,
 	IUtilityListResult,
 } from "./utility.interface";
 import type {
 	TCreateUtilityPayload,
+	TReplenishmentEstimateQuery,
 	TUpdateUtilityPayload,
+	TUtilityFundQuery,
 	TUtilityListQuery,
 } from "./utility.validation";
 
@@ -134,6 +142,77 @@ const listUtilities = async (
 			activeMemberCount,
 			perPersonShare: calculateUtilityShare(roundedTotal, activeMemberCount),
 		},
+	};
+};
+
+/**
+ * Formula U2 and the AC 5.2.2 fund card.
+ *
+ * Deposits count as money collected; only bills already marked paid leave the
+ * fund. Both aggregates are scoped to the requested month and the caller's
+ * mess. A month with no row returns zeros without creating a month row.
+ */
+const getUtilityFund = async (
+	user: IRequestUser,
+	query: TUtilityFundQuery,
+): Promise<IUtilityFundSummary> => {
+	const actor = await requireActiveMembership(user.userId);
+	const { range, context } = await resolveMonthForRead(
+		actor.messId,
+		query.month,
+	);
+
+	const [depositTotal, paidBillTotal] = await Promise.all([
+		prisma.deposit.aggregate({
+			where: {
+				messMonth: {
+					is: { messId: actor.messId, startDate: range.startDate },
+				},
+			},
+			_sum: { amount: true },
+		}),
+		prisma.utilityExpense.aggregate({
+			where: {
+				messMonth: {
+					is: { messId: actor.messId, startDate: range.startDate },
+				},
+				isPaid: true,
+			},
+			_sum: { amount: true },
+		}),
+	]);
+
+	const totalDeposits = round2(Number(depositTotal._sum.amount ?? 0));
+	const totalPaidBills = round2(Number(paidBillTotal._sum.amount ?? 0));
+	const balance = calculateUtilityFundBalance(totalDeposits, totalPaidBills);
+
+	return {
+		month: context,
+		totalDeposits,
+		totalPaidBills,
+		balance,
+		needsReplenishment: balance <= 0,
+	};
+};
+
+/**
+ * Formula U3. Manager-only because it is used when deciding the next
+ * collection round. The amount is caller-supplied; the schema has no default.
+ */
+const getReplenishmentEstimate = async (
+	user: IRequestUser,
+	query: TReplenishmentEstimateQuery,
+): Promise<IReplenishmentEstimate> => {
+	const actor = assertManager(await requireActiveMembership(user.userId));
+	const activeMemberCount = await prisma.messMember.count({
+		where: { messId: actor.messId, status: MemberStatus.ACTIVE },
+	});
+	const perMember = round2(query.perMember);
+
+	return {
+		perMember,
+		activeMemberCount,
+		totalExpected: calculateReplenishmentEstimate(perMember, activeMemberCount),
 	};
 };
 
@@ -325,6 +404,8 @@ const deleteUtility = async (
 
 export const utilityService = {
 	listUtilities,
+	getUtilityFund,
+	getReplenishmentEstimate,
 	createUtility,
 	updateUtility,
 	setUtilityPaid,

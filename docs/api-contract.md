@@ -512,6 +512,66 @@ writable. `receivedById` never changes. Response `200`: `{ deposit }`.
 Manager only. Scoped by mess; `CLOSED` month → `409`.
 Response `200`: `{ id, deleted: true }`.
 
+## Utility Fund
+
+Any `ACTIVE` member can read the fund summary. Replenishment estimation is
+manager-only because it is used when deciding the next collection round.
+
+### `GET /api/v1/utilities/fund?month=`
+
+`month` is optional and defaults to the current UTC month. GET never creates a
+month row; a month with no row returns zeros.
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Utility fund fetched successfully",
+  "data": {
+    "month": { "...": "same month context" },
+    "totalDeposits": 4000,
+    "totalPaidBills": 2500,
+    "balance": 1500,
+    "needsReplenishment": false
+  }
+}
+```
+
+- `totalDeposits` is the sum of all deposits in the month, including deposits
+  from members who later left.
+- `totalPaidBills` is the sum of utility bills where `isPaid = true`. Unpaid
+  bills are not deducted.
+- `balance = round2(totalDeposits - totalPaidBills)`.
+- A negative balance is valid.
+- `needsReplenishment` is `true` when `balance <= 0`, including an empty month
+  where the balance is `0` (AC 5.2.3).
+- Utility fund data never affects the meal rate, meal balances, or settlement.
+
+### `GET /api/v1/utilities/replenishment-estimate?perMember=500`
+
+Manager only.
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Replenishment estimate calculated successfully",
+  "data": {
+    "perMember": 500,
+    "activeMemberCount": 3,
+    "totalExpected": 1500
+  }
+}
+```
+
+- `perMember` is required, must be greater than `0`, and may have at most two
+  decimal places.
+- Only members with `status = ACTIVE` are counted.
+- `totalExpected = round2(perMember × activeMemberCount)`; zero active members
+  returns `0`.
+- This endpoint does not subtract the current fund balance. It returns the total
+  expected collection for the given per-member amount.
+
 ## Summary
 
 Any `ACTIVE` member can read the monthly meal summary. This endpoint uses only
@@ -602,6 +662,59 @@ Rules:
   `canSettle: false` and an empty settlement list; it does not invent a payer.
 - A `CLOSED` month is read live in Phase 3. Phase 4 will return the locked
   snapshot instead.
+
+## Dashboard
+
+Any `ACTIVE` member can read the Dashboard. It combines the meal block from
+the Summary service and the utility fund block from the Utility Fund service,
+so the numbers always match their dedicated pages. Utility data stays in its
+own block and never enters the meal math.
+
+### `GET /api/v1/dashboard?month=YYYY-MM`
+
+`month` is optional and defaults to the current UTC month. GET never creates a
+month row. CLOSED months remain readable.
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Dashboard fetched successfully",
+  "data": {
+    "month": { "...": "same month context" },
+    "meal": {
+      "totalMeals": 30,
+      "totalBazar": 3000,
+      "mealRate": 100,
+      "me": {
+        "memberId": "uuid",
+        "totalMeals": 10,
+        "mealCost": 1000,
+        "bazarPaid": 3000,
+        "mealBalance": 2000,
+        "balanceStatus": "RECEIVER"
+      }
+    },
+    "utility": {
+      "totalDeposits": 4000,
+      "totalPaidBills": 2500,
+      "balance": 1500,
+      "needsReplenishment": false
+    },
+    "pendingMemberCount": 2
+  }
+}
+```
+
+- `meal` is exactly the `totals` and caller's member row from
+  `GET /api/v1/summary`.
+- `utility` is exactly the fund summary from
+  `GET /api/v1/utilities/fund`.
+- `pendingMemberCount` is the number of `PENDING` members for managers and
+  `null` for non-managers.
+- No settlement list is returned; the Summary page remains the detailed view.
+- A month with no row returns active members' zero meal values and zero fund
+  values without creating a row.
 
 ## Status code summary
 

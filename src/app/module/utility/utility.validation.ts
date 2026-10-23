@@ -69,7 +69,19 @@ export const utilityListQuerySchema = z.object({
 	month: monthParamSchema.optional(),
 });
 
+export const utilityFundQuerySchema = z.object({
+	month: monthParamSchema.optional(),
+});
+
+export const replenishmentEstimateQuerySchema = z.object({
+	perMember: moneyAmountSchema,
+});
+
 export type TCreateUtilityPayload = z.infer<typeof createUtilitySchema>;
 export type TUpdateUtilityPayload = z.infer<typeof updateUtilitySchema>;
 export type TUtilityPaidPayload = z.infer<typeof utilityPaidSchema>;
 export type TUtilityListQuery = z.infer<typeof utilityListQuerySchema>;
+export type TUtilityFundQuery = z.infer<typeof utilityFundQuerySchema>;
+export type TReplenishmentEstimateQuery = z.infer<
+	typeof replenishmentEstimateQuerySchema
+>;

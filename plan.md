@@ -3,8 +3,8 @@
 **Stack:** Express.js + TypeScript, Prisma + PostgreSQL, Passport JWT, Zod, Biome, Vercel
 **Team:** Dev A and Dev B (backend), Frontend 1 and Frontend 2 (frontend)
 **Source:** `prd.md`
-**Status:** Auth, mess/members, months, meals, bazar, utilities, fund deposits and the Phase 3 Dev A summary engine are implemented. Phase 2 is complete at the API level; seed/reset scripts and the broader automated test suite are still outstanding.
-**Progress snapshot (2026-10-23):** Phase 0 foundation is implemented except seed/reset; Phase 1 APIs are implemented except `GET/PATCH /api/mess`; Phase 2 (Months, Meals, Bazar, Utilities, Fund Deposits) is implemented and manually smoke-tested; Phase 3 Dev A (Summary Engine) is implemented and DB-smoke-tested. Phase 3 Dev B (utility fund/dashboard) is next.
+**Status:** Auth, mess/members, months, meals, bazar, utilities, fund deposits, the Phase 3 summary engine, utility fund and Dashboard are implemented. Phase 2 is complete at the API level; seed/reset scripts and the broader automated test suite are still outstanding.
+**Progress snapshot (2026-10-23):** Phase 0 foundation is implemented except seed/reset; Phase 1 APIs are implemented except `GET/PATCH /api/mess`; Phase 2 (Months, Meals, Bazar, Utilities, Fund Deposits) is implemented and manually smoke-tested; Phase 3 Dev A (Summary Engine) and Dev B (Utility Fund + Dashboard) are implemented and DB-smoke-tested. Phase 4 is next.
 
 > Replace "Dev A" and "Dev B" with real names.
 
@@ -205,15 +205,15 @@ The financial core. Dev A owns meal math, Dev B owns utility math and the dashbo
 - [x] **Never import utility data here** (AC 6.1.5). A DB smoke check confirms utility bills/deposits do not change the summary.
 - [x] `canSettle: false` when meals are zero but bazar is positive (no giver exists); the response keeps the real balances and returns an empty settlement rather than inventing a payer.
 
-### Dev B - Utility fund and Dashboard
-- [ ] `utilityCalculatorService` as pure functions: share (U1), fund balance (U2), replenishment estimate (U3).
-- [ ] `GET /api/utilities/fund?month=` - `{ totalDeposits, totalPaidBills, balance, needsReplenishment }` (AC 5.2.2, 5.2.3).
-- [ ] `GET /api/utilities/replenishment-estimate?perMember=` - expected total (U3).
-- [ ] `GET /api/dashboard?month=` - combines: meal rate, total meals, total bazar (calls Dev A's calculator), utility fund summary, pending member count (managers), my own meals and balance. Keep meal and utility blocks as separate keys.
-- [ ] Tests: AC 5.1.4 (changing a bill does not move the meal rate), fund balance negative, zero members.
+### Dev B - Utility fund and Dashboard (`/api/v1/utilities`, `/api/v1/dashboard`)
+- [x] `utilityCalculatorService` as pure functions: share (U1), fund balance (U2), replenishment estimate (U3).
+- [x] `GET /api/v1/utilities/fund?month=` - `{ month, totalDeposits, totalPaidBills, balance, needsReplenishment }` (AC 5.2.2, 5.2.3).
+- [x] `GET /api/v1/utilities/replenishment-estimate?perMember=` - manager-only expected total (U3).
+- [x] `GET /api/v1/dashboard?month=` - combines the Summary meal block, Utility Fund block, manager-only pending member count and the caller's own meal balance. Meal and utility blocks stay separate keys.
+- [x] Verification: AC 5.1.4 (changing a bill does not move the meal rate), fund balance negative/zero, zero members, Dashboard parity with Summary and Utility Fund, and manager/non-manager pending count. Verified by DB smoke rather than test files inside modules.
 
 ### Sync point 3
-**Status: Dev A complete.** `GET /api/v1/summary` is mounted and documented, with pure calculator/settlement functions and DB smoke checks. Dev B's Dashboard is still pending.
+**Status: Dev A and Dev B complete.** `GET /api/v1/summary`, `GET /api/v1/utilities/fund`, `GET /api/v1/utilities/replenishment-estimate` and `GET /api/v1/dashboard` are mounted and documented. The Dashboard and AI tools reuse the same calculator/service numbers.
 
 Published signatures for Phase 5 reuse:
 
@@ -221,9 +221,12 @@ Published signatures for Phase 5 reuse:
 calculateMealRate(totalBazar: number, totalMeals: number): number
 calculateSummary(members: IMemberLedgerInput[]): ISummaryCalculation
 calculateSettlement(members: ISettlementMemberInput[]): ISettlementResult
+calculateUtilityShare(totalUtilityBills: number, activeMemberCount: number): number
+calculateUtilityFundBalance(totalDeposits: number, totalPaidBills: number): number
+calculateReplenishmentEstimate(perMember: number, activeMemberCount: number): number
 ```
 
-Frontend can wire the real Summary page now. **Dev A publishes the calculator function signatures here, because Phase 5 reuses them.**
+Frontend can wire the real Summary, Utility Fund and Dashboard pages now.
 
 ---
 
@@ -330,11 +333,11 @@ Frontend can build: chat drawer, confirmation cards, handling `proposals[]`.
 | PATCH | `/api/utilities/:id/paid` | member | B | 2 |
 | GET / POST | `/api/utilities/fund-deposits` | member / manager | B | 2 |
 | PATCH / DELETE | `/api/utilities/fund-deposits/:id` | manager | B | 2 |
-| GET | `/api/utilities/fund?month=` | member | B | 3 |
-| GET | `/api/utilities/replenishment-estimate` | manager | B | 3 |
-| GET | `/api/summary?month=` | member | A | 3 |
-| GET | `/api/summary/export` | member | A | 4 |
-| GET | `/api/dashboard?month=` | member | B | 3 |
+| GET | `/api/v1/utilities/fund?month=` | member | B | 3 |
+| GET | `/api/v1/utilities/replenishment-estimate?perMember=` | manager | B | 3 |
+| GET | `/api/v1/summary?month=` | member | A | 3 |
+| GET | `/api/v1/summary/export` | member | A | 4 |
+| GET | `/api/v1/dashboard?month=` | member | B | 3 |
 | POST | `/api/ai/chat` | member | A | 5 |
 
 Every mess-scoped route needs `checkAuth`; the service then calls `requireActiveMembership(userId)` and adds `assertManager` / `assertOwner` where required.

@@ -11,6 +11,7 @@ export interface IBazarEntry {
 	addedById: string;
 	addedByName: string;
 	paidFromMessFund: boolean;
+	receiptUrl: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 }

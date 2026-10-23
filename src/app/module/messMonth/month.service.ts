@@ -5,6 +5,9 @@ import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import type { IRequestUser } from "../auth/auth.interface";
 import { assertManager, requireActiveMembership } from "../mess/mess.scope";
+import { isProActive } from "../subscription/plan";
+import config from "../../config";
+import { currentMonthName } from "../../utils/time";
 import type {
 	IMonthContext,
 	IMonthListResult,
@@ -151,6 +154,21 @@ export const resolveMonthForRead = async (
 		? parseMonthParam(monthParam)
 		: monthRangeFromDate(new Date());
 	const month = await getMonthByDate(messId, range.startDate);
+	const mess = await prisma.mess.findUnique({
+		where: { id: messId },
+		select: { plan: true, planExpiresAt: true },
+	});
+
+	if (!mess) {
+		throw new AppError(httpStatus.NOT_FOUND, "Mess not found.");
+	}
+
+	if (!isProActive(mess) && range.name !== currentMonthName(config.app_timezone)) {
+		throw new AppError(
+			httpStatus.PAYMENT_REQUIRED,
+			"Past month archives require an active PRO subscription.",
+		);
+	}
 
 	return { range, context: toMonthContext(range, month) };
 };
@@ -178,10 +196,13 @@ const listMonths = async (user: IRequestUser): Promise<IMonthListResult> => {
 		select: monthSelect,
 		orderBy: { startDate: "desc" },
 	});
+	const visibleRows = isProActive(actor.mess)
+		? rows
+		: rows.filter((row) => row.name === currentMonthName(config.app_timezone));
 
 	return {
-		months: rows.map(toMonthSummary),
-		total: rows.length,
+		months: visibleRows.map(toMonthSummary),
+		total: visibleRows.length,
 	};
 };
 

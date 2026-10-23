@@ -17,5 +17,10 @@ router.get(
 	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
 	summaryController.getSummary,
 );
+router.get(
+	"/statement",
+	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
+	summaryController.getStatement,
+);
 
 export const summaryRoutes = router;

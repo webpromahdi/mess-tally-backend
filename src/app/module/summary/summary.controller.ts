@@ -6,6 +6,7 @@ import { sendResponse } from "../../utils/sendResponse";
 import type { IRequestUser } from "../auth/auth.interface";
 import { buildSummaryCsv } from "./summary.export";
 import { summaryService } from "./summary.service";
+import { createStatementPdf } from "./statement.service";
 import {
 	summaryExportQuerySchema,
 	summaryQuerySchema,
@@ -42,6 +43,11 @@ const getSummary = catchAsync(async (req: Request, res: Response) => {
 	});
 });
 
+const getStatement = catchAsync(async (req: Request, res: Response) => {
+	const pdf = await createStatementPdf(getUser(req), req.query.month as string | undefined);
+	res.status(httpStatus.OK).type("application/pdf").send(pdf);
+});
+
 const exportSummary = catchAsync(async (req: Request, res: Response) => {
 	const query = summaryExportQuerySchema.safeParse(req.query);
 
@@ -74,5 +80,6 @@ const exportSummary = catchAsync(async (req: Request, res: Response) => {
 
 export const summaryController = {
 	getSummary,
+	getStatement,
 	exportSummary,
 };

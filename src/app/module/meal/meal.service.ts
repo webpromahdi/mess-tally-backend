@@ -5,18 +5,21 @@ import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import type { IRequestUser } from "../auth/auth.interface";
 import type { TActiveMember } from "../mess/mess.interface";
-import { requireActiveMembership } from "../mess/mess.scope";
+import { assertManager, requireActiveMembership } from "../mess/mess.scope";
+import { assertProAccess } from "../subscription/plan";
+import config from "../../config";
+import { dateOnlyInTimeZone, isPastCutoff } from "../../utils/time";
 import {
 	assertMonthWritable,
 	getMonthByDate,
 	getOrCreateMonthByDate,
+	resolveMonthForRead,
 } from "../messMonth/month.service";
 import {
 	formatDateOnly,
 	listMonthDays,
 	monthRangeFromDate,
 	parseDateOnly,
-	parseMonthParam,
 	round2,
 } from "../messMonth/month.util";
 import type {
@@ -30,6 +33,7 @@ import type {
 } from "./meal.interface";
 import type {
 	TBulkUpsertMealPayload,
+	TSelfMealPayload,
 	TUpsertMealPayload,
 } from "./meal.validation";
 
@@ -215,9 +219,7 @@ const getMealGrid = async (
 	monthParam?: string,
 ): Promise<IMealGridResult> => {
 	const actor = await requireActiveMembership(user.userId);
-	const range = monthParam
-		? parseMonthParam(monthParam)
-		: monthRangeFromDate(new Date());
+	const { range } = await resolveMonthForRead(actor.messId, monthParam);
 
 	const month = await getMonthByDate(actor.messId, range.startDate);
 
@@ -310,6 +312,7 @@ const upsertMeal = async (
 	payload: TUpsertMealPayload,
 ): Promise<IUpsertMealResult> => {
 	const actor = await requireActiveMembership(user.userId);
+	assertManager(actor);
 	const date = parseDateOnly(payload.date);
 	const member = await resolveActiveMember(actor, payload.memberId);
 
@@ -378,6 +381,7 @@ const bulkUpsertMeals = async (
 	payload: TBulkUpsertMealPayload,
 ): Promise<IBulkUpsertMealResult> => {
 	const actor = await requireActiveMembership(user.userId);
+	assertManager(actor);
 	const date = parseDateOnly(payload.date);
 	const memberIds = payload.entries.map((entry) => entry.memberId);
 
@@ -464,6 +468,7 @@ const deleteMeal = async (
 	entryId: string,
 ): Promise<IDeleteMealResult> => {
 	const actor = await requireActiveMembership(user.userId);
+	assertManager(actor);
 
 	const entry = await prisma.mealEntry.findFirst({
 		where: {
@@ -498,9 +503,62 @@ const deleteMeal = async (
 	return { id: entry.id, deleted: true };
 };
 
+const updateOwnMeal = async (
+	user: IRequestUser,
+	payload: TSelfMealPayload,
+): Promise<IUpsertMealResult> => {
+	const actor = await requireActiveMembership(user.userId);
+	assertProAccess(actor.mess, "Self-service meals");
+
+	if (payload.date !== dateOnlyInTimeZone(new Date(), config.app_timezone)) {
+		throw new AppError(httpStatus.BAD_REQUEST, "Self-service meals are limited to today.");
+	}
+
+	if (isPastCutoff(actor.mess.mealCutoffTime, config.app_timezone)) {
+		throw new AppError(httpStatus.CONFLICT, "Today's meal cutoff has passed.");
+	}
+
+	const date = parseDateOnly(payload.date);
+	const month = await getOrCreateMonthByDate(actor.messId, date, actor.id);
+	assertMonthWritable(month);
+	const existing = await prisma.mealEntry.findUnique({
+		where: { messMonthId_memberId_date: { messMonthId: month.id, memberId: actor.id, date } },
+		select: { isLocked: true },
+	});
+
+	if (existing?.isLocked) {
+		throw new AppError(httpStatus.CONFLICT, "This meal entry is locked and cannot be changed.");
+	}
+
+	const entry = await prisma.mealEntry.upsert({
+		where: { messMonthId_memberId_date: { messMonthId: month.id, memberId: actor.id, date } },
+		create: {
+			messMonthId: month.id,
+			memberId: actor.id,
+			date,
+			breakfast: payload.breakfast ?? 0,
+			lunch: payload.lunch ?? 0,
+			dinner: payload.dinner ?? 0,
+			guestMeals: payload.guestMeals ?? 0,
+			updatedById: actor.id,
+		},
+		update: {
+			...(payload.breakfast === undefined ? {} : { breakfast: payload.breakfast }),
+			...(payload.lunch === undefined ? {} : { lunch: payload.lunch }),
+			...(payload.dinner === undefined ? {} : { dinner: payload.dinner }),
+			...(payload.guestMeals === undefined ? {} : { guestMeals: payload.guestMeals }),
+			updatedById: actor.id,
+		},
+		select: entrySelect,
+	});
+
+	return { entry: toEntryDto(entry) };
+};
+
 export const mealService = {
 	getMealGrid,
 	upsertMeal,
 	bulkUpsertMeals,
 	deleteMeal,
+	updateOwnMeal,
 };

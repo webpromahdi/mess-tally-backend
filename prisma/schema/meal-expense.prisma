@@ -6,6 +6,7 @@ model MealExpense {
   amount           Decimal  @db.Decimal(10, 2)
   bazarDate        DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
   receiptUrl       String?
+  receiptPublicId  String?  @map("receipt_public_id")
   paidFromMessFund Boolean  @default(false)
   shopperId        String
   addedById        String

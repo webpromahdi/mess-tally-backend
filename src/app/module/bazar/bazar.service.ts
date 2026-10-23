@@ -8,6 +8,7 @@ import { normalizeOptionalText } from "../../utils/text";
 import type { IRequestUser } from "../auth/auth.interface";
 import type { TActiveMember } from "../mess/mess.interface";
 import { requireActiveMembership } from "../mess/mess.scope";
+import { destroyCloudinaryAsset, uploadImageBuffer } from "../../lib/cloudinary";
 import {
 	assertMonthWritable,
 	getOrCreateMonthByDate,
@@ -41,6 +42,8 @@ const bazarSelect = {
 	shopperId: true,
 	addedById: true,
 	paidFromMessFund: true,
+	receiptUrl: true,
+	receiptPublicId: true,
 	createdAt: true,
 	updatedAt: true,
 	shopper: { select: { user: { select: { name: true } } } },
@@ -60,6 +63,7 @@ const toBazarEntry = (row: TBazarRow): IBazarEntry => ({
 	addedById: row.addedById,
 	addedByName: row.addedBy.user.name,
 	paidFromMessFund: row.paidFromMessFund,
+	receiptUrl: row.receiptUrl,
 	createdAt: row.createdAt,
 	updatedAt: row.updatedAt,
 });
@@ -321,9 +325,68 @@ const deleteBazar = async (
 	return { id: existing.id, deleted: true };
 };
 
+const uploadReceipt = async (
+	user: IRequestUser,
+	bazarId: string,
+	file: Express.Multer.File | undefined,
+): Promise<IBazarEntryResult> => {
+	const actor = await requireActiveMembership(user.userId);
+	if (!file) {
+		throw new AppError(httpStatus.BAD_REQUEST, "Receipt image is required.");
+	}
+	const existing = await prisma.mealExpense.findFirst({
+		where: { id: bazarId, messMonth: { is: { messId: actor.messId } } },
+		select: {
+			id: true,
+			receiptPublicId: true,
+			messMonth: { select: { status: true, name: true } },
+		},
+	});
+	if (!existing) {
+		throw new AppError(httpStatus.NOT_FOUND, "No bazar entry found with this id in your mess");
+	}
+	assertMonthWritable(existing.messMonth);
+	const uploaded = await uploadImageBuffer(file.buffer, `mess-tally/${actor.messId}/receipts`);
+	const updated = await prisma.mealExpense.update({
+		where: { id: existing.id },
+		data: { receiptUrl: uploaded.secure_url, receiptPublicId: uploaded.public_id },
+		select: bazarSelect,
+	});
+	await destroyCloudinaryAsset(existing.receiptPublicId);
+	return { entry: toBazarEntry(updated) };
+};
+
+const deleteReceipt = async (
+	user: IRequestUser,
+	bazarId: string,
+): Promise<IBazarEntryResult> => {
+	const actor = await requireActiveMembership(user.userId);
+	const existing = await prisma.mealExpense.findFirst({
+		where: { id: bazarId, messMonth: { is: { messId: actor.messId } } },
+		select: {
+			id: true,
+			receiptPublicId: true,
+			messMonth: { select: { status: true, name: true } },
+		},
+	});
+	if (!existing) {
+		throw new AppError(httpStatus.NOT_FOUND, "No bazar entry found with this id in your mess");
+	}
+	assertMonthWritable(existing.messMonth);
+	const updated = await prisma.mealExpense.update({
+		where: { id: existing.id },
+		data: { receiptUrl: null, receiptPublicId: null },
+		select: bazarSelect,
+	});
+	await destroyCloudinaryAsset(existing.receiptPublicId);
+	return { entry: toBazarEntry(updated) };
+};
+
 export const bazarService = {
 	listBazar,
 	createBazar,
 	updateBazar,
 	deleteBazar,
+	uploadReceipt,
+	deleteReceipt,
 };

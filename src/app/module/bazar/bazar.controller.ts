@@ -75,9 +75,21 @@ const deleteBazar = catchAsync(async (req: Request, res: Response) => {
 	});
 });
 
+const uploadReceipt = catchAsync(async (req: Request, res: Response) => {
+	const result = await bazarService.uploadReceipt(getUser(req), req.params.id as string, req.file);
+	sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "Receipt uploaded successfully", data: result });
+});
+
+const deleteReceipt = catchAsync(async (req: Request, res: Response) => {
+	const result = await bazarService.deleteReceipt(getUser(req), req.params.id as string);
+	sendResponse(res, { statusCode: httpStatus.OK, success: true, message: "Receipt deleted successfully", data: result });
+});
+
 export const bazarController = {
 	listBazar,
 	createBazar,
 	updateBazar,
 	deleteBazar,
+	uploadReceipt,
+	deleteReceipt,
 };

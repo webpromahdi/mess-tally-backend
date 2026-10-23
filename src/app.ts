@@ -20,6 +20,7 @@ import { monthRoutes } from "./app/module/messMonth/month.route";
 import { ProfileRoute } from "./app/module/profile/profile.route";
 import { summaryRoutes } from "./app/module/summary/summary.route";
 import { utilityRoutes } from "./app/module/utility/utility.route";
+import { subscriptionRoutes } from "./app/module/subscription/subscription.route";
 
 const app: Application = express();
 
@@ -48,6 +49,7 @@ app.use("/api/v1/utilities", utilityRoutes);
 app.use("/api/v1/summary", summaryRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/profile", ProfileRoute);
+app.use("/api/v1/subscription", subscriptionRoutes);
 
 // Basic route
 app.get("/", async (req: Request, res: Response) => {

@@ -27,8 +27,18 @@ const listPayments = catchAsync(async (req: Request, res: Response) => {
 });
 
 const paymentCallback = catchAsync(async (req: Request, res: Response) => {
-	const redirectURL = await subscriptionService.paymentCallback(req.query);
-	res.redirect(302, redirectURL);
+	try {
+		res.redirect(
+			httpStatus.FOUND,
+			await subscriptionService.paymentCallback(req.query),
+		);
+	} catch (error) {
+		console.error("[subscription] bKash callback failed", error);
+		res.redirect(
+			httpStatus.FOUND,
+			subscriptionService.callbackErrorRedirect(req.query),
+		);
+	}
 });
 
 const reconcilePayment = catchAsync(async (req: Request, res: Response) => {

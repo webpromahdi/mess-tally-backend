@@ -15,6 +15,35 @@ const readJson = async (response: Response): Promise<TBkashResult> => {
 	}
 };
 
+const bkashErrorMessage = (
+	result: TBkashResult,
+	fallback: string,
+): string =>
+	String(
+		result.statusMessage ||
+			result.errorMessage ||
+			result.message ||
+			result.statusCode ||
+			fallback,
+	);
+
+/** bKash wraps every answer in `statusCode`; only "0000" means the call worked. */
+export const isBkashSuccess = (result: TBkashResult): boolean =>
+	String(result.statusCode ?? "") === "0000";
+
+/**
+ * True only when the customer actually completed the payment at the gateway.
+ * `executePayment` omits `transactionStatus`; `queryPayment` keeps returning
+ * "Initiated" until the customer finishes inside the bKash app, so a bare
+ * 0000 status code is not enough on its own.
+ */
+export const isBkashCompleted = (result: TBkashResult): boolean =>
+	isBkashSuccess(result) &&
+	(result.transactionStatus === undefined ||
+		String(result.transactionStatus) === "Completed") &&
+	typeof result.trxID === "string" &&
+	result.trxID.length > 0;
+
 /**
  * One POST to a bKash Tokenized Checkout endpoint with a live ID token.
  * Network failures and gateway errors surface as a clean 502 instead of a raw
@@ -46,9 +75,19 @@ const bkashRequest = async (
 	if (!response.ok) {
 		throw new AppError(
 			httpStatus.BAD_GATEWAY,
-			`Failed to call bKash (${path}): ${
-				result.message || result.errorMessage || response.statusText
-			}`,
+			`Failed to call bKash (${path}): ${bkashErrorMessage(
+				result,
+				response.statusText,
+			)}`,
+		);
+	}
+
+	// bKash answers 200 even for logical failures (statusCode "2xxx"), so the
+	// HTTP status alone never proves the call worked.
+	if (!isBkashSuccess(result)) {
+		throw new AppError(
+			httpStatus.BAD_GATEWAY,
+			`bKash rejected ${path}: ${bkashErrorMessage(result, "unknown error")}`,
 		);
 	}
 

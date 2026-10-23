@@ -1897,7 +1897,7 @@
 								"receipt"
 							]
 						},
-						"description": "Uploads or replaces the receipt image for a bazar entry. Use the `receipt` form-data field with a JPEG, PNG, or WebP image up to 5 MB. Any active member can upload; the service verifies the entry belongs to the caller's mess. An active PRO subscription is required and a CLOSED month cannot be changed. Run List Bazar or Create Bazar first so `{{bazarEntryId}}` is populated."
+						"description": "Uploads or replaces the receipt image for a bazar entry. Use the `receipt` form-data field with a JPEG, PNG, or WebP image up to 5 MB. Any active member can upload; the service verifies the entry belongs to the caller's mess. A FREE mess receives `402` (\"Bazar receipt uploads is a PRO feature\") before the image is sent to Cloudinary, and a CLOSED month returns `409`. Run List Bazar or Create Bazar first so `{{bazarEntryId}}` is populated."
 					},
 					"response": []
 				},
@@ -1920,7 +1920,7 @@
 								"receipt"
 							]
 						},
-						"description": "Removes the receipt URL and deletes the stored Cloudinary asset. The entry must belong to the caller's mess and its month must be writable. The endpoint is available to any active member; the response returns the updated `{ entry }`."
+						"description": "Removes the receipt URL and deletes the stored Cloudinary asset. The entry must belong to the caller's mess and its month must be writable. A FREE mess receives `402` (\"Bazar receipt uploads is a PRO feature\"); a CLOSED month returns `409`. The endpoint is available to any active member and the response returns the updated `{ entry }`."
 					},
 					"response": []
 				}
@@ -2443,7 +2443,26 @@
 			"item": [
 				{
 					"name": "Get Subscription",
-					"event": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"const data = body && body.data ? body.data : {};",
+									"",
+									"// `plan` is derived from plan === PRO AND a future planExpiresAt, so a",
+									"// PRO flag without a usable expiry is a data bug worth failing on.",
+									"pm.test(\"PRO plan carries a future planExpiresAt\", () => {",
+									"    if (data.plan === \"PRO\") {",
+									"        pm.expect(Date.parse(data.planExpiresAt), \"planExpiresAt\").to.be.above(Date.now());",
+									"    }",
+									"});"
+								]
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [],
@@ -2458,7 +2477,7 @@
 								"subscription"
 							]
 						},
-						"description": "Returns the active mess subscription state, available plans, expiry, limits, and feature flags. Subscription access is resolved from the caller's active membership."
+						"description": "Returns the active mess subscription state, available plans, expiry, limits, and feature flags. Subscription access is resolved from the caller's active membership. `plan` is computed from the stored `Mess.plan` AND a future `planExpiresAt`, so a stale expiry on a FREE mess is reported as FREE. Use this to confirm `Mess.plan` changed after a payment."
 					},
 					"response": []
 				},
@@ -2509,7 +2528,7 @@
 								"activate"
 							]
 						},
-						"description": "Manager-only bKash checkout creation. Set `plan` to `MONTHLY` (৳100 / 30 days), `HALF_YEARLY` (৳500 / 180 days), or `YEARLY` (৳1000 / 365 days). The response contains `data.paymentURL`; redirect the browser to that URL to complete payment. The subscription is not activated until bKash calls the configured callback and the payment is verified."
+						"description": "Manager-only bKash checkout creation. Set `plan` to `MONTHLY` (৳100 / 30 days), `HALF_YEARLY` (৳500 / 180 days), or `YEARLY` (৳1000 / 365 days). The response contains `data.paymentId` (our payment row) and `data.paymentURL`; both are saved to the `subscriptionPaymentId` / `paymentURL` collection variables. Open `paymentURL` in a browser on this machine to pay. A `PENDING` payment older than 30 minutes is failed automatically so a lost checkout can never block the next activation (`409` only while a fresh checkout is still open). `BKASH_CALLBACK_URL` must point at this API's `/api/v1/subscription/callback` or bKash will redirect somewhere that cannot finalize the payment."
 					},
 					"response": []
 				},
@@ -2531,13 +2550,41 @@
 								"payments"
 							]
 						},
-						"description": "Lists bKash subscription payment records for the caller's active mess, newest first. Amounts are returned as numbers with the selected duration and payment status."
+						"description": "Lists bKash subscription payment records for the caller's active mess, newest first. Amounts are returned as numbers together with `durationDays`, `status`, `bkashTrxId`, `periodStart`, `periodEnd`, and `paidAt`. A completed payment must show a `bkashTrxId` and a non-null coverage window; `periodStart` is `now` for the first purchase and the current expiry for an early renewal."
 					},
 					"response": []
 				},
 				{
 					"name": "Reconcile Subscription Payment",
-					"event": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"const data = body && body.data ? body.data : {};",
+									"",
+									"if (data.id) pm.collectionVariables.set(\"subscriptionPaymentId\", data.id);",
+									"",
+									"pm.test(\"status is a known payment state\", () => {",
+									"    pm.expect([\"PAID\", \"PENDING\", \"FAILED\", \"CANCELLED\"]).to.include(data.status);",
+									"});",
+									"",
+									"// The regression this guards: bKash charged the customer but the DB kept",
+									"// a PENDING row with no trxID and no coverage window.",
+									"pm.test(\"PAID stores trxID + coverage window\", () => {",
+									"    if (data.status === \"PAID\") {",
+									"        pm.expect(data.bkashTrxId, \"bkashTrxId\").to.be.a(\"string\").and.not.empty;",
+									"        pm.expect(data.periodStart, \"periodStart\").to.be.a(\"string\").and.not.empty;",
+									"        pm.expect(data.periodEnd, \"periodEnd\").to.be.a(\"string\").and.not.empty;",
+									"        pm.expect(new Date(data.periodEnd).getTime()).to.be.above(new Date(data.periodStart).getTime());",
+									"    }",
+									"});"
+								]
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [],
@@ -2555,7 +2602,7 @@
 								"status"
 							]
 						},
-						"description": "Reconciles a pending payment by querying bKash. Use this if the browser redirect or callback was lost. The payment must belong to the caller's active mess."
+						"description": "Reconciles a payment by querying bKash, and the recovery path when the browser redirect or callback is lost. Responds `200` in every case: a customer who has not finished in the bKash app still gets the `PENDING` row (previously a `502`), and a completed charge returns the fresh row with `bkashTrxId`, `periodStart`, `periodEnd`, and `status: \"PAID\"`. The payment must belong to the caller's active mess."
 					},
 					"response": []
 				}

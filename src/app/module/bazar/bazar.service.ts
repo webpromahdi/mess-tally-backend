@@ -14,6 +14,7 @@ import {
 	getOrCreateMonthByDate,
 	resolveMonthForRead,
 } from "../messMonth/month.service";
+import { assertProAccess } from "../subscription/plan";
 import {
 	formatDateOnly,
 	monthRangeFromDate,
@@ -331,6 +332,9 @@ const uploadReceipt = async (
 	file: Express.Multer.File | undefined,
 ): Promise<IBazarEntryResult> => {
 	const actor = await requireActiveMembership(user.userId);
+	// Plan gate runs before the Cloudinary upload so a FREE mess never leaves an
+	// orphaned asset behind on rejection.
+	assertProAccess(actor.mess, "Bazar receipt uploads");
 	if (!file) {
 		throw new AppError(httpStatus.BAD_REQUEST, "Receipt image is required.");
 	}
@@ -361,6 +365,7 @@ const deleteReceipt = async (
 	bazarId: string,
 ): Promise<IBazarEntryResult> => {
 	const actor = await requireActiveMembership(user.userId);
+	assertProAccess(actor.mess, "Bazar receipt uploads");
 	const existing = await prisma.mealExpense.findFirst({
 		where: { id: bazarId, messMonth: { is: { messId: actor.messId } } },
 		select: {

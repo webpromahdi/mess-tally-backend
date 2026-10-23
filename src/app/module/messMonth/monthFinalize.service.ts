@@ -14,6 +14,9 @@ import type {
 } from "../summary/summary.interface";
 import { summaryService } from "../summary/summary.service";
 import { utilityService } from "../utility/utility.service";
+import { isProActive } from "../subscription/plan";
+import config from "../../config";
+import { currentMonthName } from "../../utils/time";
 
 const MAX_TRANSACTION_ATTEMPTS = 2;
 
@@ -95,6 +98,9 @@ const closeMonth = async (
 
 	return runSerializable(async (tx) => {
 		const month = await findMonthInTransaction(tx, actor.messId, monthId);
+		if (!isProActive(actor.mess) && month.name !== currentMonthName(config.app_timezone)) {
+			throw new AppError(httpStatus.PAYMENT_REQUIRED, "Past month archives require an active PRO subscription.");
+		}
 
 		if (month.status === MonthStatus.CLOSED) {
 			throw new AppError(
@@ -168,6 +174,9 @@ const reopenMonth = async (
 
 	return runSerializable(async (tx) => {
 		const month = await findMonthInTransaction(tx, actor.messId, monthId);
+		if (!isProActive(actor.mess) && month.name !== currentMonthName(config.app_timezone)) {
+			throw new AppError(httpStatus.PAYMENT_REQUIRED, "Past month archives require an active PRO subscription.");
+		}
 
 		if (month.status === MonthStatus.ACTIVE) {
 			throw new AppError(

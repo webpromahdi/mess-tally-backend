@@ -71,9 +71,20 @@ const deleteMeal = catchAsync(async (req: Request, res: Response) => {
 	});
 });
 
+const updateOwnMeal = catchAsync(async (req: Request, res: Response) => {
+	const result = await mealService.updateOwnMeal(getUser(req), req.body);
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: "Your meal entry was saved successfully",
+		data: result,
+	});
+});
+
 export const mealController = {
 	getMealGrid,
 	upsertMeal,
 	bulkUpsertMeals,
 	deleteMeal,
+	updateOwnMeal,
 };

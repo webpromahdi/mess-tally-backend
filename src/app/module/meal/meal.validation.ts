@@ -20,7 +20,7 @@ const dateOnlySchema = z
  * rejecting null, empty strings, negatives, NaN and Infinity. Meals may be
  * fractional (0.5).
  */
-const mealCountSchema = z.preprocess(
+export const mealCountSchema = z.preprocess(
 	(value) =>
 		value === null || value === undefined || value === "" ? Number.NaN : value,
 	z.coerce
@@ -69,6 +69,23 @@ export const bulkUpsertMealSchema = z.object({
 		),
 });
 
+export const selfMealSchema = z
+	.object({
+		date: dateOnlySchema,
+		breakfast: mealCountSchema.optional(),
+		lunch: mealCountSchema.optional(),
+		dinner: mealCountSchema.optional(),
+		guestMeals: mealCountSchema.optional(),
+	})
+	.refine(
+		(value) =>
+			value.breakfast !== undefined ||
+			value.lunch !== undefined ||
+			value.dinner !== undefined ||
+			value.guestMeals !== undefined,
+		"At least one meal count is required.",
+	);
+
 export const mealGridQuerySchema = z.object({
 	month: monthParamSchema.optional(),
 });
@@ -76,3 +93,4 @@ export const mealGridQuerySchema = z.object({
 export type TUpsertMealPayload = z.infer<typeof upsertMealSchema>;
 export type TBulkUpsertMealPayload = z.infer<typeof bulkUpsertMealSchema>;
 export type TMealGridQuery = z.infer<typeof mealGridQuerySchema>;
+export type TSelfMealPayload = z.infer<typeof selfMealSchema>;

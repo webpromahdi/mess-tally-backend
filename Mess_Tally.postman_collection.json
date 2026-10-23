@@ -1391,6 +1391,42 @@
 					"response": []
 				},
 				{
+					"name": "Update My Meals",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date\": \"{{entryDate}}\",\n  \"breakfast\": 1,\n  \"lunch\": 1,\n  \"dinner\": 0,\n  \"guestMeals\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/meals/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"meals",
+								"me"
+							]
+						},
+						"description": "PRO members can update their own meals for today only. The request accepts any non-empty subset of `breakfast`, `lunch`, `dinner`, and `guestMeals`; omitted values are preserved. It is rejected after the mess cutoff time, for a closed or locked month, or when the mess subscription is not active. Members cannot select another member."
+					},
+					"response": []
+				},
+				{
 					"name": "Delete Meal",
 					"event": [
 						{
@@ -1571,6 +1607,35 @@
 							]
 						},
 						"description": "Any ACTIVE member. Returns the standard API envelope whose `data` is exactly the same Summary response as `GET /api/v1/summary`, including `isLocked`. A CLOSED month exports the locked snapshot. Utility values are never included."
+					},
+					"response": []
+				}
+				,
+				{
+					"name": "Download Member Statement PDF",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/summary/statement?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"summary",
+								"statement"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "PRO members can download their own statement for a CLOSED month. The PDF is generated from the locked summary and includes meal totals, meal rate, meal cost, bazar paid, meal balance, and the settlement note. Current or open months return `409`; FREE or expired subscriptions return `402`."
 					},
 					"response": []
 				}
@@ -1799,6 +1864,63 @@
 							]
 						},
 						"description": "Deletes one bazar entry. The row is looked up by id AND the caller's mess, so a cross-mess id returns `404`. A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				}
+				,
+				{
+					"name": "Upload Bazar Receipt",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "receipt",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar/{{bazarEntryId}}/receipt",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar",
+								"{{bazarEntryId}}",
+								"receipt"
+							]
+						},
+						"description": "Uploads or replaces the receipt image for a bazar entry. Use the `receipt` form-data field with a JPEG, PNG, or WebP image up to 5 MB. Any active member can upload; the service verifies the entry belongs to the caller's mess. An active PRO subscription is required and a CLOSED month cannot be changed. Run List Bazar or Create Bazar first so `{{bazarEntryId}}` is populated."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Bazar Receipt",
+					"event": [],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar/{{bazarEntryId}}/receipt",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar",
+								"{{bazarEntryId}}",
+								"receipt"
+							]
+						},
+						"description": "Removes the receipt URL and deletes the stored Cloudinary asset. The entry must belong to the caller's mess and its month must be writable. The endpoint is available to any active member; the response returns the updated `{ entry }`."
 					},
 					"response": []
 				}
@@ -2317,6 +2439,129 @@
 			]
 		},
 		{
+			"name": "Subscription",
+			"item": [
+				{
+					"name": "Get Subscription",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/subscription",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"subscription"
+							]
+						},
+						"description": "Returns the active mess subscription state, available plans, expiry, limits, and feature flags. Subscription access is resolved from the caller's active membership."
+					},
+					"response": []
+				},
+				{
+					"name": "Activate Subscription",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.paymentId) pm.collectionVariables.set(\"subscriptionPaymentId\", body.data.paymentId);",
+									"    if (body.data.paymentURL) pm.collectionVariables.set(\"paymentURL\", body.data.paymentURL);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"plan\": \"MONTHLY\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/subscription/activate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"subscription",
+								"activate"
+							]
+						},
+						"description": "Manager-only bKash checkout creation. Set `plan` to `MONTHLY` (৳100 / 30 days), `HALF_YEARLY` (৳500 / 180 days), or `YEARLY` (৳1000 / 365 days). The response contains `data.paymentURL`; redirect the browser to that URL to complete payment. The subscription is not activated until bKash calls the configured callback and the payment is verified."
+					},
+					"response": []
+				},
+				{
+					"name": "List Subscription Payments",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/subscription/payments",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"subscription",
+								"payments"
+							]
+						},
+						"description": "Lists bKash subscription payment records for the caller's active mess, newest first. Amounts are returned as numbers with the selected duration and payment status."
+					},
+					"response": []
+				},
+				{
+					"name": "Reconcile Subscription Payment",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/subscription/payments/{{subscriptionPaymentId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"subscription",
+								"payments",
+								"{{subscriptionPaymentId}}",
+								"status"
+							]
+						},
+						"description": "Reconciles a pending payment by querying bKash. Use this if the browser redirect or callback was lost. The payment must belong to the caller's active mess."
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "General",
 			"item": [
 				{
@@ -2440,6 +2685,21 @@
 		{
 			"key": "entryDate",
 			"value": "2026-10-23",
+			"type": "string"
+		},
+		{
+			"key": "subscriptionExpiresAt",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "subscriptionPaymentId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "paymentURL",
+			"value": "",
 			"type": "string"
 		}
 	]

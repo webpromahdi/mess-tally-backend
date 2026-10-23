@@ -7,6 +7,7 @@ import type { IRequestUser } from "../auth/auth.interface";
 import {
 	assertManager,
 	assertOwner,
+	assertActiveMemberCapacity,
 	requireActiveMembership,
 } from "../mess/mess.scope";
 import type {
@@ -178,6 +179,11 @@ const approveMember = async (
 	}
 
 	const approved = await prisma.$transaction(async (tx) => {
+		const mess = await tx.mess.findUniqueOrThrow({
+			where: { id: actor.messId },
+			select: { id: true, plan: true, planExpiresAt: true },
+		});
+		await assertActiveMemberCapacity(tx, mess);
 		const updated = await tx.messMember.update({
 			where: { id: target.id },
 			data: {

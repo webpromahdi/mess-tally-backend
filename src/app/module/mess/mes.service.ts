@@ -9,6 +9,7 @@ import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import type { IRequestUser } from "../auth/auth.interface";
 import type { ICreateMessPayload, IJoinMessPayload } from "./mess.interface";
+import { assertActiveMemberCapacity } from "./mess.scope";
 
 // Shuffle your unambiguous alphabet once and keep it consistent across your app
 const sqids = new Sqids({
@@ -174,25 +175,31 @@ const joinMess = async (user: IRequestUser, payload: IJoinMessPayload) => {
 		? MemberStatus.PENDING
 		: MemberStatus.ACTIVE;
 
-	const membership = await prisma.messMember.upsert({
-		where: {
-			userId_messId: { userId: user.userId, messId: mess.id },
-		},
-		create: {
-			userId: user.userId,
-			messId: mess.id,
-			status,
-			role: MessRole.MEMBER,
-		},
-		update: {
-			status,
-			role: MessRole.MEMBER,
-			isManager: false,
-			rentShare: 1.0,
-			fixedRentAmount: null,
-			joinedAt: new Date(),
-			leftAt: null,
-		},
+	const membership = await prisma.$transaction(async (tx) => {
+		if (status === MemberStatus.ACTIVE) {
+			await assertActiveMemberCapacity(tx, mess);
+		}
+
+		return tx.messMember.upsert({
+			where: {
+				userId_messId: { userId: user.userId, messId: mess.id },
+			},
+			create: {
+				userId: user.userId,
+				messId: mess.id,
+				status,
+				role: MessRole.MEMBER,
+			},
+			update: {
+				status,
+				role: MessRole.MEMBER,
+				isManager: false,
+				rentShare: 1.0,
+				fixedRentAmount: null,
+				joinedAt: new Date(),
+				leftAt: null,
+			},
+		});
 	});
 
 	if (membership.status === MemberStatus.ACTIVE) {

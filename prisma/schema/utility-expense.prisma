@@ -12,7 +12,6 @@ model UtilityExpense {
   notes       String?
   paidById    String?          @map("paid_by_id")
   addedById   String           @map("added_by_id")
-  paymentId   String?          @unique(map: "utility_expense_payment_key") @map("payment_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -21,7 +20,6 @@ model UtilityExpense {
   messMonth MessMonth   @relation(fields: [messMonthId], references: [id], onDelete: Cascade)
   paidBy    MessMember? @relation("UtilityPaidBy", fields: [paidById], references: [id], onDelete: SetNull)
   addedBy   MessMember  @relation("UtilityAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
-  payment   Payment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@index([messMonthId, category])
   @@map("utility_expense")

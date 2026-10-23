@@ -3,7 +3,11 @@ import { Role } from "../../../generated/prisma/enums";
 import { auth } from "../../middleware/checkAuth";
 import { validateRequest } from "../../middleware/validateRequest";
 import { mealController } from "./meal.controller";
-import { bulkUpsertMealSchema, upsertMealSchema } from "./meal.validation";
+import {
+	bulkUpsertMealSchema,
+	selfMealSchema,
+	upsertMealSchema,
+} from "./meal.validation";
 
 const router = Router();
 
@@ -19,6 +23,12 @@ router.put(
 	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
 	validateRequest(upsertMealSchema),
 	mealController.upsertMeal,
+);
+router.patch(
+	"/me",
+	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
+	validateRequest(selfMealSchema),
+	mealController.updateOwnMeal,
 );
 router.post(
 	"/bulk",

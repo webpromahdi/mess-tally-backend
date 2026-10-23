@@ -30,7 +30,6 @@ model MessMonth {
   mealExpenses    MealExpense[]
   utilityExpenses UtilityExpense[]
   deposits        Deposit[]
-  payments        Payment[]
 
   @@unique([messId, startDate], map: "mess_month_mess_start_key")
   @@map("mess_month")

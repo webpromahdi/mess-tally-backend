@@ -52,6 +52,8 @@ enum UtilitySplitType {
 
 enum PaymentType {
   SUBSCRIPTION_MONTHLY
+  SUBSCRIPTION_HALF_YEARLY
+  SUBSCRIPTION_YEARLY
 }
 
 enum PaymentStatus {

@@ -34,6 +34,7 @@ import type {
 	IUtilityBillResult,
 	IUtilityFundSummary,
 	IUtilityListResult,
+	IUtilitySnapshot,
 } from "./utility.interface";
 import type {
 	TCreateUtilityPayload,
@@ -65,6 +66,15 @@ const utilitySelect = {
 type TUtilityRow = Prisma.UtilityExpenseGetPayload<{
 	select: typeof utilitySelect;
 }>;
+
+/**
+ * Narrow database surface used by the close-time snapshot. Both the global
+ * client and an interactive transaction satisfy this shape.
+ */
+type TUtilitySnapshotDb = Pick<
+	typeof prisma,
+	"utilityExpense" | "deposit" | "messMember"
+>;
 
 const toUtilityBill = (row: TUtilityRow): IUtilityBill => ({
 	id: row.id,
@@ -192,6 +202,52 @@ const getUtilityFund = async (
 		totalPaidBills,
 		balance,
 		needsReplenishment: balance <= 0,
+	};
+};
+
+/**
+ * Captures the utility totals that belong to a month at close time.
+ *
+ * `totalBills` deliberately includes paid and unpaid bills so it is the same
+ * U1 "total monthly utility bills" figure shown on the Utility page. Fund
+ * balance uses only paid bills. The snapshot is stored as audit data and is
+ * never folded into meal/bazar Summary values (AC 6.1.5).
+ */
+const buildUtilitySnapshot = async (
+	messId: string,
+	messMonthId: string,
+	db: TUtilitySnapshotDb,
+): Promise<IUtilitySnapshot> => {
+	const billTotal = await db.utilityExpense.aggregate({
+		where: { messMonthId },
+		_sum: { amount: true },
+	});
+	const paidBillTotal = await db.utilityExpense.aggregate({
+		where: { messMonthId, isPaid: true },
+		_sum: { amount: true },
+	});
+	const depositTotal = await db.deposit.aggregate({
+		where: { messMonthId },
+		_sum: { amount: true },
+	});
+	const activeMemberCount = await db.messMember.count({
+		where: { messId, status: MemberStatus.ACTIVE },
+	});
+
+	const totalBills = round2(Number(billTotal._sum.amount ?? 0));
+	const totalPaidBills = round2(Number(paidBillTotal._sum.amount ?? 0));
+	const totalDeposits = round2(Number(depositTotal._sum.amount ?? 0));
+	const balance = calculateUtilityFundBalance(totalDeposits, totalPaidBills);
+
+	return {
+		totalBills,
+		totalPaidBills,
+		totalUnpaidBills: round2(totalBills - totalPaidBills),
+		totalDeposits,
+		balance,
+		needsReplenishment: balance <= 0,
+		activeMemberCount,
+		perPersonShare: calculateUtilityShare(totalBills, activeMemberCount),
 	};
 };
 
@@ -406,6 +462,7 @@ export const utilityService = {
 	listUtilities,
 	getUtilityFund,
 	getReplenishmentEstimate,
+	buildUtilitySnapshot,
 	createUtility,
 	updateUtility,
 	setUtilityPaid,

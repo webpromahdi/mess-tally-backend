@@ -1,12 +1,15 @@
 import type { Prisma } from "../../../generated/prisma/client";
-import { MemberStatus } from "../../../generated/prisma/enums";
+import { MemberStatus, MonthStatus } from "../../../generated/prisma/enums";
 import { prisma } from "../../lib/prisma";
 import type { IRequestUser } from "../auth/auth.interface";
+import type { TActiveMember } from "../mess/mess.interface";
 import { requireActiveMembership } from "../mess/mess.scope";
+import type { IMonthContext } from "../messMonth/month.interface";
 import { resolveMonthForRead } from "../messMonth/month.service";
 import { round2 } from "../messMonth/month.util";
 import { calculateSummary } from "./summary.calculator";
 import type {
+	ILockedMonthSnapshot,
 	IMemberLedgerInput,
 	ISummaryMember,
 	ISummaryResult,
@@ -25,11 +28,94 @@ const summaryMemberSelect = {
 	},
 } satisfies Prisma.MessMemberSelect;
 
+/**
+ * Narrow database surface used by the summary builder. Both the global client
+ * and the close transaction satisfy this shape.
+ */
+type TSummaryDb = Pick<
+	typeof prisma,
+	"mealEntry" | "mealExpense" | "messMember"
+>;
+
 const statusRank: Record<MemberStatus, number> = {
 	[MemberStatus.ACTIVE]: 0,
 	[MemberStatus.PENDING]: 1,
 	[MemberStatus.LEFT]: 2,
 	[MemberStatus.REJECTED]: 3,
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Runtime guard for a persisted snapshot. A malformed snapshot must never be
+ * trusted; the caller falls back to a live calculation.
+ */
+const isLockedSnapshot = (
+	value: unknown,
+	monthId: string,
+): value is ILockedMonthSnapshot => {
+	if (!isRecord(value) || value.version !== 1) {
+		return false;
+	}
+
+	const summary = value.summary;
+
+	if (!isRecord(summary) || !isRecord(summary.month)) {
+		return false;
+	}
+
+	if (summary.month.id !== monthId) {
+		return false;
+	}
+
+	if (
+		typeof summary.canSettle !== "boolean" ||
+		!isRecord(summary.totals) ||
+		!Array.isArray(summary.members) ||
+		!Array.isArray(summary.settlement) ||
+		!isRecord(value.utility)
+	) {
+		return false;
+	}
+
+	return (
+		typeof summary.totals.totalMeals === "number" &&
+		typeof summary.totals.totalBazar === "number" &&
+		typeof summary.totals.mealRate === "number" &&
+		typeof summary.totals.totalPositiveBalance === "number"
+	);
+};
+
+/**
+ * Returns the locked summary for a CLOSED month, or `null` when no valid
+ * snapshot exists. The current month context is used so the response always
+ * reports the real status and calendar bounds.
+ */
+const readLockedSummary = async (
+	context: IMonthContext,
+): Promise<ISummaryResult | null> => {
+	const monthId = context.id;
+
+	if (!monthId || context.status !== MonthStatus.CLOSED) {
+		return null;
+	}
+
+	const month = await prisma.messMonth.findUnique({
+		where: { id: monthId },
+		select: { lockedSnapshot: true },
+	});
+	const snapshot = month?.lockedSnapshot;
+
+	if (!isLockedSnapshot(snapshot, monthId)) {
+		return null;
+	}
+
+	return {
+		...snapshot.summary,
+		month: context,
+		isLocked: true,
+	};
 };
 
 /**
@@ -41,36 +127,34 @@ const statusRank: Record<MemberStatus, number> = {
  * and deposits are deliberately not queried (AC 6.1.5).
  *
  * A month with no `mess_month` row returns zero totals without creating one.
+ * `db` is either the global client or the close transaction, which keeps the
+ * locked snapshot consistent with the transaction that writes it.
  */
-const getSummary = async (
-	user: IRequestUser,
-	monthParam?: string,
+const buildSummaryForMonth = async (
+	actor: TActiveMember,
+	context: IMonthContext,
+	db: TSummaryDb,
 ): Promise<ISummaryResult> => {
-	const actor = await requireActiveMembership(user.userId);
-	const { context } = await resolveMonthForRead(actor.messId, monthParam);
-
-	// Two aggregate queries, then one member query. No per-member queries.
-	const [mealGroups, bazarGroups] = await Promise.all([
-		context.id
-			? prisma.mealEntry.groupBy({
-					by: ["memberId"],
-					where: { messMonthId: context.id },
-					_sum: {
-						breakfast: true,
-						lunch: true,
-						dinner: true,
-						guestMeals: true,
-					},
-				})
-			: Promise.resolve([]),
-		context.id
-			? prisma.mealExpense.groupBy({
-					by: ["shopperId"],
-					where: { messMonthId: context.id },
-					_sum: { amount: true },
-				})
-			: Promise.resolve([]),
-	]);
+	const monthId = context.id;
+	const mealGroups = monthId
+		? await db.mealEntry.groupBy({
+				by: ["memberId"],
+				where: { messMonthId: monthId },
+				_sum: {
+					breakfast: true,
+					lunch: true,
+					dinner: true,
+					guestMeals: true,
+				},
+			})
+		: [];
+	const bazarGroups = monthId
+		? await db.mealExpense.groupBy({
+				by: ["shopperId"],
+				where: { messMonthId: monthId },
+				_sum: { amount: true },
+			})
+		: [];
 
 	const mealsByMember = new Map<string, number>();
 
@@ -96,7 +180,7 @@ const getSummary = async (
 		...bazarByMember.keys(),
 	]);
 
-	const memberRows = await prisma.messMember.findMany({
+	const memberRows = await db.messMember.findMany({
 		where: {
 			messId: actor.messId,
 			OR: [
@@ -177,9 +261,26 @@ const getSummary = async (
 		},
 		members,
 		settlement: settlement.transfers,
+		isLocked: context.status === MonthStatus.CLOSED,
 	};
+};
+
+const getSummary = async (
+	user: IRequestUser,
+	monthParam?: string,
+): Promise<ISummaryResult> => {
+	const actor = await requireActiveMembership(user.userId);
+	const { context } = await resolveMonthForRead(actor.messId, monthParam);
+	const locked = await readLockedSummary(context);
+
+	if (locked) {
+		return locked;
+	}
+
+	return buildSummaryForMonth(actor, context, prisma);
 };
 
 export const summaryService = {
 	getSummary,
+	buildSummaryForMonth,
 };

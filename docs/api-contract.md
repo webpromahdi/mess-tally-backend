@@ -38,7 +38,8 @@ Error envelope (from the global handler):
 - `startDate` is the first day and `endDate` the last day of the month, `YYYY-MM-DD`, UTC-safe.
 - A missing `mess_month` row is auto-created as `ACTIVE` on the first meal write (decision D1).
 - Reads never create a month row.
-- Writes to a `CLOSED` month return `409` (decision D2). Reopening is Phase 4.
+- Writes to a `CLOSED` month return `409` (decision D2). A manager can reopen it with `PATCH /api/v1/months/:id/reopen`.
+- Closing a month snapshots the meal summary and utility totals. Summary reads for that month use the snapshot until it is reopened.
 - Month requests use UTC. `?month=` should always be sent by the frontend to avoid host-timezone ambiguity.
 
 ## Months
@@ -85,6 +86,58 @@ Manager only.
 | Already `CLOSED` | `409` | `This month (…) is already closed…` |
 | Invalid `YYYY-MM` | `400` | Format message |
 | Not a manager | `403` | Manager access required |
+
+### `PATCH /api/v1/months/:id/close`
+
+Manager only. Finalizes the month in one serializable transaction:
+
+- computes the meal summary and utility totals from the current data
+- stores `lockedMealRate`, `lockedTotalMeals`, `lockedTotalBazar`, `lockedTotalUtilities`
+- stores the versioned `lockedSnapshot` (summary, settlement and utility audit data)
+- sets `status = CLOSED`, `closedAt` and `closedById`
+- sets `isLocked = true` on every meal entry in the month
+
+`lockedTotalUtilities` is the sum of **all** utility bills in the month, paid and unpaid. Utility values are stored for audit only and never enter Summary/export meal figures.
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Month closed successfully",
+  "data": {
+    "month": {
+      "id": "uuid",
+      "name": "2026-10",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-31",
+      "status": "CLOSED",
+      "managerId": "uuid",
+      "closedAt": "2026-10-31T12:00:00.000Z",
+      "isCurrent": true
+    }
+  }
+}
+```
+
+| Case | Status |
+|---|---|
+| Month closed | `200` |
+| Month id not in caller's mess | `404` |
+| Already `CLOSED` | `409` |
+| Not a manager | `403` |
+
+Closing is allowed even when the summary cannot settle (`canSettle: false`); the snapshot preserves that state and the empty settlement.
+
+### `PATCH /api/v1/months/:id/reopen`
+
+Manager only. Sets the month back to `ACTIVE`, clears `closedAt`, `closedById`, all `locked*` columns and `lockedSnapshot`, and sets `isLocked = false` on every meal entry in the month. Returns the same `{ month }` shape with `status: "ACTIVE"` and `closedAt: null`.
+
+| Case | Status |
+|---|---|
+| Month reopened | `200` |
+| Month id not in caller's mess | `404` |
+| Already `ACTIVE` | `409` |
+| Not a manager | `403` |
 
 ## Meals
 
@@ -582,8 +635,8 @@ included (AC 6.1.5).
 
 `month` is optional and defaults to the current UTC month. A month with no
 `mess_month` row returns `200` with `month.exists = false`, zero totals, and the
-current ACTIVE members at zero; GET never creates a month. CLOSED months remain
-readable.
+current ACTIVE members at zero; GET never creates a month. CLOSED months return
+the snapshot written when the month was closed, not a live recalculation.
 
 Included members:
 
@@ -636,7 +689,8 @@ the sum of trips where the member is the `shopperId` (not `addedById`).
         "toMemberId": "uuid",
         "amount": 2000
       }
-    ]
+    ],
+    "isLocked": false
   }
 }
 ```
@@ -660,8 +714,56 @@ Rules:
 - If meals are `0` but bazar is positive, the formula produces only positive
   balances and there is no giver. The response keeps those balances, returns
   `canSettle: false` and an empty settlement list; it does not invent a payer.
-- A `CLOSED` month is read live in Phase 3. Phase 4 will return the locked
-  snapshot instead.
+- `isLocked` is `false` for `ACTIVE` (or missing) months and `true` for a
+  `CLOSED` month.
+- When a month is `CLOSED`, the response is the snapshot written by
+  `PATCH /api/v1/months/:id/close`: same shape, `month.status = "CLOSED"`,
+  `isLocked: true`. Edits to the underlying tables cannot change this response
+  until the manager reopens the month. If a legacy closed month has no valid
+  snapshot, the server falls back to a live calculation but still returns
+  `isLocked: true`.
+- A member who joins after a month was closed is not added retroactively to the
+  locked member table. The Dashboard returns a zero `meal.me` row for that
+  caller rather than failing.
+
+### `GET /api/v1/summary/export?month=YYYY-MM&format=csv|json`
+
+Any `ACTIVE` member. `month` defaults to the current UTC month and `format`
+defaults to `csv`. This endpoint never creates a month row and uses the same
+Summary service as `GET /api/v1/summary`, so a closed month exports the locked
+snapshot. Utility bills and fund deposits are never included.
+
+`format=json` returns the standard API envelope with `data` exactly matching the
+Summary response.
+
+`format=csv` returns a downloadable UTF-8 file:
+
+- `Content-Type: text/csv; charset=utf-8`
+- `Content-Disposition: attachment; filename="mess-tally-summary-2026-10.csv"`
+- leading UTF-8 BOM (so Excel reads Bangla names correctly)
+- CRLF line endings and RFC 4180 escaping
+
+The file contains the summary totals, a member table and the settlement list:
+
+```csv
+Month,2026-10
+Status,CLOSED
+Locked,true
+Can Settle,true
+Total Meals,30.00
+Total Bazar,3000.00
+Meal Rate,100.00
+Total Positive Balance,2000.00
+
+Member ID,Name,Status,Total Meals,Meal Cost,Bazar Paid,Meal Balance,Balance Status
+uuid,Masad,ACTIVE,10.00,1000.00,3000.00,2000.00,RECEIVER
+
+Settlement
+From Member ID,From Name,To Member ID,To Name,Amount
+uuid,Masad,uuid,Rahim,2000.00
+```
+
+Invalid `format` returns `400`.
 
 ## Dashboard
 
@@ -673,7 +775,9 @@ own block and never enters the meal math.
 ### `GET /api/v1/dashboard?month=YYYY-MM`
 
 `month` is optional and defaults to the current UTC month. GET never creates a
-month row. CLOSED months remain readable.
+month row. CLOSED months remain readable; the meal block uses the locked Summary
+snapshot. If the caller joined after the month was closed, `meal.me` is a zero
+row because they were not part of that finalized month.
 
 ```json
 {

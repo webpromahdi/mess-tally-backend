@@ -1,7 +1,5 @@
-import httpStatus from "http-status";
 import { MemberStatus } from "../../../generated/prisma/enums";
 import { prisma } from "../../lib/prisma";
-import { AppError } from "../../utils/AppError";
 import type { IRequestUser } from "../auth/auth.interface";
 import { requireActiveMembership } from "../mess/mess.scope";
 import { currentMonthRange, parseMonthParam } from "../messMonth/month.util";
@@ -41,14 +39,17 @@ const getDashboard = async (
 			: Promise.resolve(null),
 	]);
 
-	const me = summary.members.find((member) => member.memberId === actor.id);
-
-	if (!me) {
-		throw new AppError(
-			httpStatus.INTERNAL_SERVER_ERROR,
-			"Your membership is missing from the monthly summary.",
-		);
-	}
+	// A CLOSED month returns its historical snapshot. A member who joined after
+	// it was finalized is not in that snapshot and correctly had zero activity
+	// for the month, so fall back to a zero row instead of failing the request.
+	const me = summary.members.find((member) => member.memberId === actor.id) ?? {
+		memberId: actor.id,
+		totalMeals: 0,
+		mealCost: 0,
+		bazarPaid: 0,
+		mealBalance: 0,
+		balanceStatus: "SETTLED" as const,
+	};
 
 	const myMeal: IDashboardMemberMeal = {
 		memberId: me.memberId,

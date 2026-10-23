@@ -19,7 +19,7 @@ import {
 	type IMonthRange,
 } from "./month.util";
 
-const monthSelect = {
+export const monthSelect = {
 	id: true,
 	name: true,
 	startDate: true,
@@ -29,9 +29,11 @@ const monthSelect = {
 	closedAt: true,
 } satisfies Prisma.MessMonthSelect;
 
-type TMonthRow = Prisma.MessMonthGetPayload<{ select: typeof monthSelect }>;
+export type TMonthRow = Prisma.MessMonthGetPayload<{
+	select: typeof monthSelect;
+}>;
 
-const toMonthSummary = (row: TMonthRow): IMonthSummary => ({
+export const toMonthSummary = (row: TMonthRow): IMonthSummary => ({
 	id: row.id,
 	name: row.name,
 	startDate: formatDateOnly(row.startDate),

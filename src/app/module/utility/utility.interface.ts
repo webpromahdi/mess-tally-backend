@@ -49,6 +49,18 @@ export interface IUtilityFundSummary {
 	needsReplenishment: boolean;
 }
 
+/** Utility values captured when a month is closed. Not exposed by Summary. */
+export interface IUtilitySnapshot {
+	totalBills: number;
+	totalPaidBills: number;
+	totalUnpaidBills: number;
+	totalDeposits: number;
+	balance: number;
+	needsReplenishment: boolean;
+	activeMemberCount: number;
+	perPersonShare: number;
+}
+
 export interface IReplenishmentEstimate {
 	perMember: number;
 	activeMemberCount: number;

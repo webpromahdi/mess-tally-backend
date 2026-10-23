@@ -8,6 +8,11 @@ const router = Router();
 // Identity only; mess scope is resolved from `user.activeMessId` inside the
 // service. Summary reads never create a month row.
 router.get(
+	"/export",
+	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
+	summaryController.exportSummary,
+);
+router.get(
 	"/",
 	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
 	summaryController.getSummary,

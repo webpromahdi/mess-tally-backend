@@ -4,7 +4,7 @@
 **Team:** Dev A and Dev B (backend), Frontend 1 and Frontend 2 (frontend)
 **Source:** `prd.md`
 **Status:** Auth, mess/members, months, meals, bazar, utilities, fund deposits, the Phase 3 summary engine, utility fund and Dashboard are implemented. Phase 2 is complete at the API level; seed/reset scripts and the broader automated test suite are still outstanding.
-**Progress snapshot (2026-10-23):** Phase 0 foundation is implemented except seed/reset; Phase 1 APIs are implemented except `GET/PATCH /api/mess`; Phase 2 (Months, Meals, Bazar, Utilities, Fund Deposits) is implemented and manually smoke-tested; Phase 3 Dev A (Summary Engine) and Dev B (Utility Fund + Dashboard) are implemented and DB-smoke-tested. Phase 4 is next.
+**Progress snapshot (2026-10-23):** Phase 0 foundation is implemented except seed/reset; Phase 1 APIs are implemented except `GET/PATCH /api/mess`; Phase 2 (Months, Meals, Bazar, Utilities, Fund Deposits) is implemented and manually smoke-tested; Phase 3 Dev A (Summary Engine) and Dev B (Utility Fund + Dashboard) are implemented and DB-smoke-tested. Phase 4 Dev A (close/reopen, locked summary, CSV/JSON export) is implemented and DB-smoke-tested.
 
 > Replace "Dev A" and "Dev B" with real names.
 
@@ -233,11 +233,11 @@ Frontend can wire the real Summary, Utility Fund and Dashboard pages now.
 ## 9. Phase 4 - Finalize Month and Export (2-3 days)
 
 ### Dev A
-- [ ] `PATCH /api/months/:id/close` - manager only. In one transaction: compute summary and utilities, store `locked_meal_rate`, `locked_total_meals`, `locked_total_bazar`, `locked_total_utilities` and the full `locked_snapshot` (summary + settlement JSON), set `closed_at`, `closed_by_id`, `status = CLOSED`, set `meal_entry.is_locked = true`.
-- [ ] `PATCH /api/months/:id/reopen` - manager only, clears locks (decision D2).
-- [ ] When a month is CLOSED, `GET /api/v1/summary` returns the locked snapshot plus a flag `isLocked: true`.
-- [ ] `GET /api/v1/summary/export?month=&format=csv|json` - member table, settlement list, totals. CSV with UTF-8 BOM so Excel opens Bangla names correctly.
-- [ ] Tests: close, edit blocked after close (409), reopen, export content equals summary.
+- [x] `PATCH /api/months/:id/close` - manager only. In one transaction: compute summary and utilities, store `locked_meal_rate`, `locked_total_meals`, `locked_total_bazar`, `locked_total_utilities` and the full `locked_snapshot` (summary + settlement JSON), set `closed_at`, `closed_by_id`, `status = CLOSED`, set `meal_entry.is_locked = true`.
+- [x] `PATCH /api/months/:id/reopen` - manager only, clears locks (decision D2).
+- [x] When a month is CLOSED, `GET /api/v1/summary` returns the locked snapshot plus a flag `isLocked: true`.
+- [x] `GET /api/v1/summary/export?month=&format=csv|json` - member table, settlement list, totals. CSV with UTF-8 BOM so Excel opens Bangla names correctly.
+- [x] Tests: close, edit blocked after close (409), reopen, export content equals summary.
 
 ### Dev B
 - [ ] Review all Phase 2 and 3 queries with Prisma `$queryRaw` or `groupBy` where loops exist. Avoid N+1.

@@ -1,5 +1,6 @@
 import type { MemberStatus } from "../../../generated/prisma/enums";
 import type { IMonthContext } from "../messMonth/month.interface";
+import type { IUtilitySnapshot } from "../utility/utility.interface";
 
 /** Settlement role derived from the final, cent-normalized meal balance. */
 export type TBalanceStatus = "RECEIVER" | "GIVER" | "SETTLED";
@@ -87,4 +88,17 @@ export interface ISummaryResult {
 	totals: ISummaryTotals;
 	members: ISummaryMember[];
 	settlement: ISettlementTransfer[];
+	/** True when these figures came from a closed month's locked snapshot. */
+	isLocked: boolean;
+}
+
+/**
+ * Persisted in `MessMonth.lockedSnapshot`. Utility values are kept here for
+ * audit only; Summary and export never expose them (AC 6.1.5).
+ */
+export interface ILockedMonthSnapshot {
+	version: 1;
+	closedAt: string;
+	summary: ISummaryResult;
+	utility: IUtilitySnapshot;
 }

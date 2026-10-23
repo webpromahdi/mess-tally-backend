@@ -26,6 +26,10 @@ export interface IOpenMonthResult {
 	created: boolean;
 }
 
+export interface IMonthLockResult {
+	month: IMonthSummary;
+}
+
 /**
  * Shared month header returned by bazar, utilities and deposits. `id` is null
  * and `exists` false when the month has no row yet.

@@ -20,5 +20,15 @@ router.post(
 	validateRequest(openMonthSchema),
 	monthController.openMonth,
 );
+router.patch(
+	"/:id/close",
+	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
+	monthController.closeMonth,
+);
+router.patch(
+	"/:id/reopen",
+	auth(Role.USER, Role.ADMIN, Role.SUPERADMIN),
+	monthController.reopenMonth,
+);
 
 export const monthRoutes = router;

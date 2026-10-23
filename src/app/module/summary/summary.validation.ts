@@ -10,3 +10,10 @@ export const summaryQuerySchema = z.object({
 });
 
 export type TSummaryQuery = z.infer<typeof summaryQuerySchema>;
+
+export const summaryExportQuerySchema = z.object({
+	month: monthParamSchema.optional(),
+	format: z.enum(["csv", "json"]).optional().default("csv"),
+});
+
+export type TSummaryExportQuery = z.infer<typeof summaryExportQuerySchema>;

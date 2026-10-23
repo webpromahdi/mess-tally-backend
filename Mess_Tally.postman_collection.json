@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
 		"name": "Mess_Tally",
-		"description": "Postman collection for the MessTally backend. Covers every route currently mounted in the app: `/api/v1/auth`, `/api/v1/mess`, and the root health route.\n\nBase URL is controlled by the `baseUrl` collection variable (default: http://localhost:8000, matching PORT in .env). Login, Verify Email, Refresh Token, and Create Mess save the returned tokens into collection variables and also set the httpOnly cookies. Join Mess stores the joined mess and membership ids in collection variables.\n\nResend OTP re-issues a registration or password-reset code. It only works when that flow is already pending, and is limited to one request every 60 seconds with at most 3 resends per session.\n\nProtected routes accept the access token either from the cookie jar or via the `Authorization: Bearer {{accessToken}}` header. `Refresh Token` reads the `refreshToken` httpOnly cookie, so it must run after Login, Verify Email, or Create Mess in the same Postman session.",
+		"description": "Postman collection for the MessTally backend. It mirrors every route currently mounted in `src/app.ts`: `/api/v1/auth`, `/api/v1/profile`, `/api/v1/mess` (including the `/mess/members` and `/mess/leave` routes), `/api/v1/months`, `/api/v1/meals`, `/api/v1/bazar`, the utilities and utility fund deposit routes, `/api/v1/summary`, `/api/v1/dashboard`, and the root health route. Planned AI routes are intentionally absent.\n\nBase URL comes from the `baseUrl` collection variable (default `http://localhost:8000`, matching `PORT` in `.env`).\n\nAuth flow: Register sends an OTP, Verify Email creates the user and returns tokens, and Login/Refresh Token return a fresh token pair. Login, Verify Email, and Refresh Token set the `accessToken` and `refreshToken` httpOnly cookies; the Login and Refresh Token test scripts also copy the tokens plus `activeMessId`/`mess` into collection variables.\n\nMess scope: tokens carry identity only (`userId`, `name`, `email`, `role`). There is no `messId` claim and no mess-switch endpoint. The server reads `user.activeMessId`, verifies the matching `mess_member` row is `ACTIVE`, and only then runs the mess-scoped action. Create Mess, Join Mess, and Approve Member maintain that pointer; Leave Mess and Remove Member clear it.\n\nProtected requests accept the access token from the cookie jar or from the `Authorization: Bearer {{accessToken}}` header. Create Mess, Join Mess, and My Messes require `Role.USER`; the other protected routes accept any authenticated role, but mess-scoped actions still need a valid ACTIVE membership. `Refresh Token` reads the `refreshToken` httpOnly cookie, so run Login or Verify Email earlier in the same Postman session.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -41,7 +41,7 @@
 								"register"
 							]
 						},
-						"description": "Validates the email with Zod, including a DNS MX lookup (domains that cannot receive mail, such as `gmail.co` or `example.com`, are rejected), stores the pending registration in Redis and emails a 6-digit OTP (valid for 5 minutes). The pending registration itself is kept for 1 hour so a new code can be requested after the OTP expires. The user is only created after Verify Email.\n\nThe sample body uses a real Gmail address because `example.com` publishes a null MX record and would be rejected.\n\nA 60-second cooldown is enforced per email, so an immediate second Register call returns `429`.\n\nReturns OTP timing metadata in `data`: `expiresInSeconds` (300), `resendAvailableInSeconds` (60) and `resendsRemaining` (3).\n\nIn development the OTP is also printed in the server console as `[dev] OTP <email> : <otp>`."
+						"description": "Validates the email with Zod, including a DNS MX lookup (domains that cannot receive mail, such as `gmail.co` or `example.com`, are rejected), stores the pending registration in Redis and emails a 6-digit OTP (valid for 5 minutes). The pending registration itself is kept for 1 hour so a new code can be requested after the OTP expires. The user is only created after Verify Email.\n\nThe sample body uses a real Gmail address because `example.com` publishes a null MX record and would be rejected.\n\nA 60-second cooldown is enforced per email, so an immediate second Register call returns `429`.\n\nResponds `201` with `data: { email, purpose, expiresInSeconds, resendAvailableInSeconds, resendsRemaining }` (`300`, `60` and `3`). No tokens are issued yet.\n\nIn development the OTP is also printed in the server console as `[dev] OTP <email> : <otp>`."
 					},
 					"response": []
 				},
@@ -96,7 +96,7 @@
 								"verify-email"
 							]
 						},
-						"description": "Validates the registration OTP, creates the user, sends the welcome email, and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nIf the code has expired the API returns `Verification code has expired. Please request a new one.` — call Resend OTP with `purpose: \"REGISTRATION\"` to get a fresh code, since the pending registration survives for 1 hour. After 5 wrong codes the OTP is invalidated and the response is `429`.\n\nThe test script stores both tokens in collection variables."
+						"description": "Validates the registration OTP, creates the user, sends the welcome email, and sets `accessToken` and `refreshToken` httpOnly cookies. Responds `201` with `data: { user, accessToken, refreshToken }`; the new user starts with `activeMessId: null`.\n\nIf the code has expired the API returns `Verification code has expired. Please request a new one.` — call Resend OTP with `purpose: \"REGISTRATION\"` to get a fresh code, since the pending registration survives for 1 hour. After 5 wrong codes the OTP is invalidated and the response is `429`.\n\nOther errors: `400` when there is no pending registration, `409` when the email is already verified, and `403` for suspended or deleted users.\n\nThe test script stores both tokens in collection variables."
 					},
 					"response": []
 				},
@@ -122,10 +122,17 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/resend-otp",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "auth", "resend-otp"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"resend-otp"
+							]
 						},
-						"description": "Re-issues a 6-digit OTP when the previous one expired. `purpose` must be `REGISTRATION` (after Register) or `FORGOT_PASSWORD` (after Forgot Password).\n\nThe route only works when that flow is already pending. Without the Redis session created by Register or Forgot Password it returns `400` and sends nothing, so it cannot be called randomly.\n\nLimits per email + purpose:\n- `429` while the 60-second cooldown is still running; the message includes the seconds left.\n- `429` after 3 resends in the same session; restart the flow with Register or Forgot Password.\n\nThe previous code is invalidated immediately. Response `data` contains `expiresInSeconds` (300), `resendAvailableInSeconds` (60) and `resendsRemaining`.\n\nOther errors: `409` if the registration email is already registered, `403` if the account is suspended, deleted or unverified, and `404` if the user no longer exists."
+						"description": "Re-issues a 6-digit OTP when the previous one expired. `purpose` must be `REGISTRATION` (after Register) or `FORGOT_PASSWORD` (after Forgot Password).\n\nThe route only works when that flow is already pending. Without the Redis session created by Register or Forgot Password it returns `400` and sends nothing, so it cannot be called randomly.\n\nLimits per email + purpose:\n- `429` while the 60-second cooldown is still running; the message includes the seconds left.\n- `429` after 3 resends in the same session; restart the flow with Register or Forgot Password.\n\nThe previous code is invalidated immediately. Responds `200` with `data: { email, purpose, expiresInSeconds, resendAvailableInSeconds, resendsRemaining }`, where `resendsRemaining` is counted after this resend.\n\nOther errors: `409` if the registration email has since been registered, and for `FORGOT_PASSWORD` `403` when the account is suspended, deleted or unverified, plus `404` when the user no longer exists."
 					},
 					"response": []
 				},
@@ -145,6 +152,22 @@
 									"    }",
 									"    if (body.data.refreshToken) {",
 									"        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
+									"    }",
+									"",
+									"    if (body.data.activeMessId) {",
+									"        pm.collectionVariables.set(\"activeMessId\", body.data.activeMessId);",
+									"    } else {",
+									"        pm.collectionVariables.unset(\"activeMessId\");",
+									"    }",
+									"",
+									"    if (body.data.mess) {",
+									"        pm.collectionVariables.set(\"messId\", body.data.mess.id);",
+									"        pm.collectionVariables.set(\"roomCode\", body.data.mess.roomCode);",
+									"        pm.collectionVariables.set(\"messName\", body.data.mess.name);",
+									"    } else {",
+									"        pm.collectionVariables.unset(\"messId\");",
+									"        pm.collectionVariables.unset(\"roomCode\");",
+									"        pm.collectionVariables.unset(\"messName\");",
 									"    }",
 									"}"
 								]
@@ -180,7 +203,7 @@
 								"login"
 							]
 						},
-						"description": "Logs in an active, email-verified user and sets `accessToken` and `refreshToken` httpOnly cookies.\n\nThe test script stores both tokens in collection variables."
+						"description": "Logs in with email and password. Unknown emails return `404`, suspended or deleted accounts `403`, and a wrong password `401`. Email verification is not re-checked at login.\n\nOn success it sets `accessToken` and `refreshToken` httpOnly cookies and responds `200` with `data: { accessToken, refreshToken, activeMessId, mess }`. `mess` is the summary of the active mess (`id`, `name`, `roomCode`, `currency`, `isJoinable`, `requireApproval`, `mealCutoffTime`) or `null`.\n\nThe test script stores both tokens and syncs `activeMessId`, `messId`, `roomCode`, and `messName` from the response."
 					},
 					"response": []
 				},
@@ -207,7 +230,7 @@
 								"me"
 							]
 						},
-						"description": "Returns the logged-in user's account and profile.\n\nRequires a valid access token, supplied either by the `accessToken` cookie set during Login / Verify Email or by the `Authorization: Bearer <token>` header. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
+						"description": "Returns the authenticated user's full account: `id`, `email`, `emailVerified`, `name`, `role`, `status`, `isDeleted`, `deletedAt`, `activeMessId`, `createdAt`, `updatedAt`, and the nested `profile` (`bio`, `phone`, `address`, `imageUrl`, `imagePublicId`). The password is omitted. Responds `200`.\n\nRequires a valid access token, supplied either by the `accessToken` cookie set during Login / Verify Email or by the `Authorization: Bearer <token>` header. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
 					},
 					"response": []
 				},
@@ -227,6 +250,22 @@
 									"    }",
 									"    if (body.data.refreshToken) {",
 									"        pm.collectionVariables.set(\"refreshToken\", body.data.refreshToken);",
+									"    }",
+									"",
+									"    if (body.data.activeMessId) {",
+									"        pm.collectionVariables.set(\"activeMessId\", body.data.activeMessId);",
+									"    } else {",
+									"        pm.collectionVariables.unset(\"activeMessId\");",
+									"    }",
+									"",
+									"    if (body.data.mess) {",
+									"        pm.collectionVariables.set(\"messId\", body.data.mess.id);",
+									"        pm.collectionVariables.set(\"roomCode\", body.data.mess.roomCode);",
+									"        pm.collectionVariables.set(\"messName\", body.data.mess.name);",
+									"    } else {",
+									"        pm.collectionVariables.unset(\"messId\");",
+									"        pm.collectionVariables.unset(\"roomCode\");",
+									"        pm.collectionVariables.unset(\"messName\");",
 									"    }",
 									"}"
 								]
@@ -257,7 +296,7 @@
 								"refresh-token"
 							]
 						},
-						"description": "Issues a new access token and refresh token using the `refreshToken` httpOnly cookie.\n\nNo request body is required, and the controller does not read an Authorization header — run Login, Verify Email, or Create Mess first so Postman has the refresh cookie. The test script updates both collection variables with the new tokens."
+						"description": "Issues a new access token and refresh token using the `refreshToken` httpOnly cookie. No request body is required and the controller does not read an Authorization header — run Login or Verify Email first so Postman has the refresh cookie (Create Mess no longer issues tokens).\n\nResponds `200` with `data: { accessToken, refreshToken, activeMessId, mess }`; `mess` is the active mess summary or `null`. The refresh token is rotated and both cookies are reset. The test script updates both tokens and syncs `activeMessId`, `messId`, `roomCode`, and `messName`."
 					},
 					"response": []
 				},
@@ -293,7 +332,7 @@
 								"forgot-password"
 							]
 						},
-						"description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`, and a 1-hour `user-forgetPassword-session:<email>` marker records that a reset is pending so the code can be re-sent later.\n\nOnly active, email-verified, non-deleted users can request a reset. A 60-second cooldown is enforced, so an immediate repeat call returns `429`. In development the OTP is printed in the server console.\n\nReturns `expiresInSeconds` (300), `resendAvailableInSeconds` (60) and `resendsRemaining` (3) in `data`.\n\nIf the code expires, call Resend OTP with `purpose: \"FORGOT_PASSWORD\"`, then use the received OTP with Reset Password."
+						"description": "Sends a 6-digit password reset OTP to the email (valid for 5 minutes). The OTP is stored in Redis under `user-forgetPassword-otp:<email>`, and a 1-hour `user-forgetPassword-session:<email>` marker records that a reset is pending so the code can be re-sent later.\n\nOnly existing, email-verified, non-deleted accounts that are not suspended can request a reset. Unknown email `404`; suspended, deleted or unverified `403`. A 60-second cooldown is enforced, so an immediate repeat call returns `429`. In development the OTP is printed in the server console.\n\nResponds `200` with `data: { email, purpose, expiresInSeconds, resendAvailableInSeconds, resendsRemaining }`.\n\nIf the code expires, call Resend OTP with `purpose: \"FORGOT_PASSWORD\"`, then use the received OTP with Reset Password."
 					},
 					"response": []
 				},
@@ -329,7 +368,7 @@
 								"reset-password"
 							]
 						},
-						"description": "Verifies the password reset OTP sent by Forgot Password and updates the user's password.\n\nThe OTP must match `user-forgetPassword-otp:<email>` in Redis and expires after 5 minutes; once expired the API returns `Password reset code has expired. Please request a new one.` After 5 wrong codes the OTP is invalidated and the response is `429`.\n\nA successful reset clears the pending session marker and the resend limits, so a later Forgot Password request starts with 3 fresh resends. A password-reset confirmation email is sent to the user after the password is updated."
+						"description": "Verifies the password reset OTP sent by Forgot Password and updates the user's password.\n\nThe OTP must match `user-forgetPassword-otp:<email>` in Redis and expires after 5 minutes; once expired the API returns `Password reset code has expired. Please request a new one.` After 5 wrong codes the OTP is invalidated and the response is `429`.\n\nErrors: `404` unknown email, `403` for suspended, deleted or unverified users.\n\nA successful reset clears the pending session marker and the resend limits, so a later Forgot Password request starts with 3 fresh resends. A password-reset confirmation email is sent to the user after the password is updated. Responds `200` with `data: null`."
 					},
 					"response": []
 				}
@@ -374,7 +413,7 @@
 								"update"
 							]
 						},
-						"description": "Updates the authenticated user's profile information.\n\nAt least one of `bio`, `phone`, or `address` is required. All fields are optional and support empty strings for clearing existing values. Requires a valid access token and an active, email-verified account.\n\nThe route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
+						"description": "Updates the authenticated user's profile row. Provide at least one of `bio`, `phone`, or `address`.\n\n- `bio`: up to 500 characters; `\"\"` clears it.\n- `phone`: up to 20 characters and must match `+?[0-9\\s()-]{6,20}`, so it cannot be cleared with an empty string.\n- `address`: up to 255 characters; `\"\"` clears it.\n\nFields are trimmed before saving. Responds `200` with the updated profile row (`bio`, `phone`, `address`, `imageUrl`, `imagePublicId`, timestamps).\n\nRequires a valid access token and an active, email-verified account. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
 					},
 					"response": []
 				},
@@ -395,7 +434,7 @@
 								{
 									"key": "profileImage",
 									"type": "file",
-									"src": "/Users/masadrayan/My Projects/Mess Tally/mess-tally-backend/postman/sample-profile.png"
+									"src": []
 								}
 							]
 						},
@@ -411,7 +450,7 @@
 								"image"
 							]
 						},
-						"description": "Uploads or replaces the authenticated user's profile image.\n\nSend the image as `multipart/form-data` using the `profileImage` field. Only JPEG, PNG, and WebP images are accepted, with a maximum size of 5 MB. The previous Cloudinary image is deleted after a successful replacement.\n\n**Before sending, select an actual image file in the `profileImage` field.** If that field is left empty, Postman fails locally with `EISDIR: illegal operation on a directory, read` and the request never reaches the server. The request method must be `PATCH`.\n\nRequires a valid access token and an active, email-verified account. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
+						"description": "Uploads or replaces the authenticated user's profile image. Responds `201` with the updated profile row.\n\nSend the image as `multipart/form-data` using the `profileImage` field. Only JPEG, PNG, and WebP images are accepted, with a maximum size of 5 MB; other types return `400` and oversize files `413`. The previous Cloudinary image is deleted after a successful replacement.\n\n**Before sending, select an actual image file in the `profileImage` field.** The previously saved sample path no longer exists in the repository; if the field is left empty, Postman fails locally with `EISDIR: illegal operation on a directory, read` and the request never reaches the server. The request method must be `PATCH`.\n\nRequires a valid access token and an active, non-deleted account. The route is protected by `auth(Role.USER, Role.ADMIN, Role.SUPERADMIN)`."
 					},
 					"response": []
 				}
@@ -472,7 +511,7 @@
 								"mess"
 							]
 						},
-						"description": "Creates a mess and makes the logged-in user its OWNER (also flagged as manager and ACTIVE). Protected by `auth()`, so any authenticated user can call it.\n\nOnly `name` is required; `address`, `currency`, `mealCutoffTime`, `isJoinable`, and `requireApproval` are optional. Server defaults: `currency` = \"BDT\", `mealCutoffTime` = \"11:00\", `isJoinable` = true, `requireApproval` = true.\n\nA user can only be ACTIVE in one mess: if the caller already has an ACTIVE membership, this returns `409 Conflict` and asks them to leave that mess first.\n\nThe server pulls the next integer from the `mess_room_code_seq` PostgreSQL sequence and encodes it with Sqids, prefixed by the first three letters of the mess name (e.g. \"Sunrise Mess\" -> `SUN-JEVTDKRA`). In one transaction it creates the mess, the OWNER membership, and sets `user.activeMessId`.\n\nResponds `201` with `{ mess, activeMessId }`. No tokens or cookies are issued here: tokens are identity-only and come from login/refresh. The test script stores `messId`, `activeMessId`, `roomCode`, and `messName`."
+						"description": "Creates a mess and makes the logged-in user its OWNER (also flagged as manager and ACTIVE). Protected by `auth(Role.USER)`, so ADMIN and SUPERADMIN accounts receive `403`.\n\nOnly `name` is required; `address`, `currency`, `mealCutoffTime`, `isJoinable`, and `requireApproval` are optional. Server defaults: `currency` = \"BDT\", `mealCutoffTime` = \"11:00\", `isJoinable` = true, `requireApproval` = true. `name` is trimmed, `currency` is uppercased, and an empty `address` is stored as `null`.\n\nA user can only be ACTIVE in one mess: if the caller already has an ACTIVE membership, this returns `409 Conflict` and asks them to leave that mess first. A blank name returns `400`, an inactive user `403`, and a missing user `404`.\n\nThe server pulls the next integer from the `mess_room_code_seq` PostgreSQL sequence and encodes it with Sqids, prefixed by the first three letters of the mess name after stripping non-letters (padded with `X`), e.g. \"Sunrise Mess\" -> `SUN-JEVTDKRA`. In one transaction it creates the mess, the OWNER membership, and sets `user.activeMessId`.\n\nResponds `201` with `data: { mess, activeMessId }`. `mess` includes its `members` array (the new OWNER row) plus `plan`, `planExpiresAt`, and timestamps. **No tokens or cookies are issued here**: tokens are identity-only and come from Login/Verify Email/Refresh Token. The test script stores `messId`, `activeMessId`, `roomCode`, and `messName`."
 					},
 					"response": []
 				},
@@ -535,7 +574,7 @@
 								"join"
 							]
 						},
-						"description": "Joins an existing mess using its `roomCode` (case-insensitive, trimmed). Protected by `auth()`, with `validateRequest` enforcing that `roomCode` is present.\n\nResponds `201` with `{ mess, membership, activeMessId }`. The membership is `PENDING` when the mess has `requireApproval = true` (then `activeMessId` is `null`), otherwise `ACTIVE` and `user.activeMessId` is set to this mess.\n\nNo tokens are issued here. Errors: `404` unknown room code, `403` when `isJoinable = false`, `409` when the user already has a `PENDING`/`ACTIVE` membership in this mess or is `ACTIVE` in another mess. A previous `LEFT` or `REJECTED` row is reused and reset to `MEMBER` with manager rights cleared.\n\nRun Create Mess first to populate `roomCode`, but use an account that is not ACTIVE in another mess. The test script stores `joinedMessId`, `membershipId`, `membershipStatus`, and `activeMessId`."
+						"description": "Joins an existing mess using its `roomCode` (trimmed and uppercased). Protected by `auth(Role.USER)`, so ADMIN and SUPERADMIN accounts receive `403`; `validateRequest` requires a non-empty code of at most 64 characters.\n\nResponds `201` with `data: { mess, membership, activeMessId }`. The membership is `PENDING` when the mess has `requireApproval = true` (then `activeMessId` is `null`), otherwise `ACTIVE` and `user.activeMessId` is set to this mess.\n\nNo tokens are issued here. Errors: `404` unknown room code, `403` when `isJoinable = false`, and `409` when the user already has an ACTIVE membership (here or in another mess) or a PENDING request for this mess. A previous `LEFT` or `REJECTED` row is reused and reset to `MEMBER`, `isManager: false`, `rentShare: 1.0`, `fixedRentAmount: null`, `joinedAt: now`, `leftAt: null`.\n\nRun Create Mess first to populate `roomCode`, but use an account that is not ACTIVE in another mess. The test script stores `joinedMessId`, `membershipId`, `membershipStatus`, and `activeMessId`."
 					},
 					"response": []
 				},
@@ -589,7 +628,7 @@
 								"my"
 							]
 						},
-						"description": "Lists every mess the logged-in user belongs to, for the mess picker. Protected by `auth()` only: this endpoint must stay usable when the caller has no active mess, so it never calls `requireActiveMembership`.\n\nResponds `200` with `{ activeMessId, messes[] }`. Each row carries `membershipId`, `role`, `status`, `isManager`, `joinedAt`, `leftAt`, `isActive`, and a `mess` summary (`id`, `name`, `address`, `currency`, `roomCode`, `isJoinable`, `requireApproval`, `mealCutoffTime`).\n\nRows are `ACTIVE` first, then `PENDING`, then `LEFT` (newest first within each group); `REJECTED` is excluded. `isActive` marks the one mess pointed at by `user.activeMessId`, and `activeMessId` is `null` when that pointer is missing or stale (no matching `ACTIVE` membership), so the token/JWT is never trusted for scope.\n\nThe test script asserts the list shape and syncs `activeMessId` (or unsets it when null)."
+						"description": "Lists every mess the logged-in user belongs to, for the mess picker. Protected by `auth(Role.USER)`; this endpoint must stay usable when the caller has no active mess, so it never calls `requireActiveMembership`.\n\nResponds `200` with `{ activeMessId, messes[] }`. Each row carries `membershipId`, `role`, `status`, `isManager`, `joinedAt`, `leftAt`, `isActive`, and a `mess` summary (`id`, `name`, `address`, `currency`, `roomCode`, `isJoinable`, `requireApproval`, `mealCutoffTime`).\n\nRows are `ACTIVE` first, then `PENDING`, then `LEFT` (newest first within each group); `REJECTED` is excluded. `isActive` marks the one mess pointed at by `user.activeMessId`, and `activeMessId` is `null` when that pointer is missing or stale (no matching `ACTIVE` membership), so the token/JWT is never trusted for scope.\n\nThe test script asserts the list shape and syncs `activeMessId` (or unsets it when null)."
 					},
 					"response": []
 				}
@@ -655,7 +694,7 @@
 								}
 							]
 						},
-						"description": "Lists every `mess_member` row of the caller's active mess (all statuses by default), ordered ACTIVE -> PENDING -> LEFT -> REJECTED. Any ACTIVE member may call it.\n\nThe optional `?status=ACTIVE` filter is what the meals, bazar and utility dropdowns use (AC 2.1.2). An invalid status value returns `400`.\n\nResponds `200` with `{ members[], total }`. Each row has `id` (the `mess_member` id used by every other endpoint), `userId`, `name`, `email`, `avatarUrl`, `role`, `status`, `isManager`, `rentShare`, `fixedRentAmount`, `joinedAt`, and `leftAt`.\n\nThe test script stores the first ACTIVE non-owner member as `memberId`, which is the target used by Transfer Manager, Transfer Ownership and Remove Member."
+						"description": "Lists every `mess_member` row of the caller's active mess (all statuses by default), sorted `ACTIVE` -> `PENDING` -> `LEFT` -> `REJECTED` and oldest first within each group. Any authenticated user with an ACTIVE membership may call it; callers without one get `403`.\n\nThe optional `?status=ACTIVE` filter is what the meals, bazar and utility dropdowns use (AC 2.1.2). An invalid status value returns `400`.\n\nResponds `200` with `{ members[], total }`. Each row has `id` (the `mess_member` id used by every other endpoint), `userId`, `name`, `email`, `avatarUrl`, `role`, `status`, `isManager`, `rentShare`, `fixedRentAmount` (number or `null`), `joinedAt`, and `leftAt`.\n\nThe test script stores the first ACTIVE non-owner member as `memberId`, which is the target used by Transfer Manager, Transfer Ownership and Remove Member."
 					},
 					"response": []
 				},
@@ -759,7 +798,7 @@
 								"approve"
 							]
 						},
-						"description": "Manager only. Moves a `PENDING` join request to `ACTIVE`, stamps `joinedAt`, and points `user.activeMessId` at this mess (PRD 2.1).\n\nScoped by mess: a member id from another mess returns `404`; a row that is not `PENDING` returns `409`. Because a user can be ACTIVE in only one mess (D14), approval is also rejected with `409` when the user has become active in another mess in the meantime.\n\nResponds `200` with the updated member row."
+						"description": "Manager only. Moves a `PENDING` join request to `ACTIVE`, sets `isManager: false`, stamps `joinedAt`, clears `leftAt`, and points `user.activeMessId` at this mess (PRD 2.1).\n\nScoped by mess: a member id from another mess returns `404`; a row that is not `PENDING` returns `409`. Because a user can be ACTIVE in only one mess (D14), approval is also rejected with `409` when the user has become active in another mess in the meantime.\n\nResponds `200` with the updated member row (same shape as List Members)."
 					},
 					"response": []
 				},
@@ -810,7 +849,7 @@
 								"reject"
 							]
 						},
-						"description": "Manager only. Moves a `PENDING` join request to `REJECTED` and clears `isManager`. The row is kept (D10) so a later join reuses it; rejected rows are excluded from all calculations and dropdowns.\n\n`404` when the id is not in the caller's mess, `409` when the row is not `PENDING`. Responds `200` with the updated member row."
+						"description": "Manager only. Moves a `PENDING` join request to `REJECTED` and clears `isManager`. The row is kept (D10) so a later join reuses it; rejected rows are excluded from all calculations and dropdowns. If the rejected user's `activeMessId` points at this mess, it is cleared defensively.\n\n`404` when the id is not in the caller's mess, `409` when the row is not `PENDING`. Responds `200` with the updated member row."
 					},
 					"response": []
 				},
@@ -863,7 +902,7 @@
 								"manager"
 							]
 						},
-						"description": "Transfers the manager position to the target ACTIVE member. The caller gives up `is_manager` and the target receives it, so a mess never has more than one manager. A manager can hand the position to another member; if the caller is the OWNER, `role` stays `OWNER` and only the manager flag moves. The OWNER can also call this when they no longer hold the flag, so a mess can never be stuck without a manager (for example after a manager leaves). Ownership itself is a separate action: `PATCH /api/mess/members/:id/owner`.\n\nNo request body is needed. The target must be an ACTIVE member of the caller's mess and cannot be the caller (`400`). Plain members get `403`, unknown or cross-mess ids `404`, non-active targets `409`. Responds `200` with the target row (`isManager: true`); refetch `GET /api/mess/members` to see the previous manager's row as `false`."
+						"description": "Transfers the manager position to the target ACTIVE member. The caller gives up `is_manager` and the target receives it, so a mess never has more than one manager. A manager can hand the position to another member; if the caller is the OWNER, `role` stays `OWNER` and only the manager flag moves. The OWNER can also call this when they no longer hold the flag, so a mess can never be stuck without a manager (for example after a manager leaves). Ownership itself is a separate action: `PATCH /api/v1/mess/members/:id/owner`.\n\nNo request body is needed. The target must be an ACTIVE member of the caller's mess and cannot be the caller (`400`). Plain members get `403`, unknown or cross-mess ids `404`, non-active targets `409`. Responds `200` with the target row (`isManager: true`); refetch `GET /api/v1/mess/members` to see the previous manager's row as `false`."
 					},
 					"response": []
 				},
@@ -932,7 +971,7 @@
 								"owner"
 							]
 						},
-						"description": "OWNER only. Moves the OWNER role to an ACTIVE member of the same mess: the target becomes `OWNER` with `isManager: true`, and the previous owner becomes a `MEMBER` with `isManager: false`, so exactly one owner and one manager remain. The current owner is demoted before the target is promoted so the `mess_member_one_owner_idx` partial unique index is never violated.\n\nRun this before `POST /api/mess/leave` when the mess still has other active members; leaving as the owner returns `409` until ownership is transferred. The target must be ACTIVE, in the same mess, and not the caller (`400`). A non-owner caller gets `403`, unknown or cross-mess ids `404`, non-active targets `409`. Responds `200` with the new owner's member row."
+						"description": "OWNER only. Moves the OWNER role to an ACTIVE member of the same mess: the target becomes `OWNER` with `isManager: true`, and the previous owner becomes a `MEMBER` with `isManager: false`, so exactly one owner and one manager remain. The current owner is demoted before the target is promoted so the `mess_member_one_owner_idx` partial unique index is never violated.\n\nRun this before `POST /api/v1/mess/leave` when the mess still has other active members; leaving as the owner returns `409` until ownership is transferred. The target must be ACTIVE, in the same mess, and not the caller (`400`). A non-owner caller gets `403`, unknown or cross-mess ids `404`, non-active targets `409`. Responds `200` with the new owner's member row."
 					},
 					"response": []
 				},
@@ -980,7 +1019,7 @@
 								"leave"
 							]
 						},
-						"description": "Leaves the caller's active mess: sets `status = LEFT`, stamps `leftAt`, clears `isManager`, and nulls `user.activeMessId`. Switching messes means leaving and then joining another (D7).\n\nAn OWNER with other ACTIVE members must first transfer ownership with `PATCH /api/mess/members/:id/owner` (`409` otherwise); the last active member can always leave. Responds `200` with `{ messId, leftAt, activeMessId: null }`."
+						"description": "Leaves the caller's active mess: sets `status = LEFT`, stamps `leftAt`, clears `isManager`, and nulls `user.activeMessId`. Switching messes means leaving and then joining another (D7); there is no switch endpoint.\n\nAn OWNER with other ACTIVE members must first transfer ownership with `PATCH /api/v1/mess/members/:id/owner` (`409` otherwise); the last active member can always leave. Callers without a valid ACTIVE membership get `403`. Responds `200` with `{ messId, leftAt, activeMessId: null }`."
 					},
 					"response": []
 				},
@@ -1036,6 +1075,1070 @@
 			]
 		},
 		{
+			"name": "Months",
+			"item": [
+				{
+					"name": "List Months",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.months && body.data.months.length) {",
+									"    pm.collectionVariables.set(\"month\", body.data.months[0].name);",
+									"    pm.collectionVariables.set(\"monthId\", body.data.months[0].id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/months",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"months"
+							]
+						},
+						"description": "Lists every month of the caller's active mess, newest first. Mess scope comes from `user.activeMessId`; no mess id is sent by the client and none is added to the JWT. Each row returns `id`, `name` (`YYYY-MM`), `startDate`, `endDate`, `status` (`ACTIVE` / `CLOSED`), `managerId`, `closedAt` and `isCurrent`. Requires an ACTIVE membership (`403` otherwise)."
+					},
+					"response": []
+				},
+				{
+					"name": "Open Month",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.month) {",
+									"    pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    pm.collectionVariables.set(\"monthId\", body.data.month.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"month\": \"2026-10\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/months",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"months"
+							]
+						},
+						"description": "Manager only. Opens a calendar month explicitly (D1). Responds `201` with `{ month, created: true }` on the first open and `200` with `created: false` if the month is already ACTIVE. A CLOSED month returns `409` because reopening is a Phase 4 action. Non-managers get `403`. Meals also auto-create the month on first write, so this endpoint is for explicit control."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Meals",
+			"item": [
+				{
+					"name": "Get Meal Grid",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.month && body.data.month.name) {",
+									"        pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    }",
+									"    if (body.data.month && body.data.month.id) {",
+									"        pm.collectionVariables.set(\"monthId\", body.data.month.id);",
+									"    }",
+									"    if (body.data.days && body.data.days.length) {",
+									"        pm.collectionVariables.set(\"mealDate\", body.data.days[0]);",
+									"    }",
+									"    if (body.data.members && body.data.members.length) {",
+									"        const member = body.data.members[0];",
+									"        pm.collectionVariables.set(\"memberId\", member.memberId);",
+									"        const firstEntry = (member.days || []).find((day) => day.entryId);",
+									"        if (firstEntry) {",
+									"            pm.collectionVariables.set(\"mealEntryId\", firstEntry.entryId);",
+									"        }",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/meals?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"meals"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Returns the dense meal grid for a month: every day, every ACTIVE member (plus LEFT members who have data, flagged read-only), per-member totals and `houseTotals` (AC 3.1.1). `?month=YYYY-MM` is optional and defaults to the current UTC month. A month with no row is still a `200`: `month.exists = false`, `month.id = null`, all cells zero. This read never creates a `mess_month` row. Requires an ACTIVE membership."
+					},
+					"response": []
+				},
+				{
+					"name": "Upsert Meal",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.entry && body.data.entry.id) {",
+									"    pm.collectionVariables.set(\"mealEntryId\", body.data.entry.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"date\": \"{{mealDate}}\",\n  \"breakfast\": 1,\n  \"lunch\": 2,\n  \"dinner\": 1,\n  \"guestMeals\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/meals",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"meals"
+							]
+						},
+						"description": "Upserts one grid cell (AC 3.1.2, AC 3.1.5). `PUT` replaces the whole cell, so all four counts are required; values must be finite and `>= 0` (AC 3.1.3). The month is derived from `date` and auto-created on first write. A date in a previous month is accepted and lands in that month. Cross-mess member ids return `404`; non-active members return `409`; a CLOSED month or a locked entry returns `409`. Idempotent: repeating the same payload leaves one row. Responds `200` with `{ entry }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Upsert Meals",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date\": \"{{mealDate}}\",\n  \"entries\": [\n    {\n      \"memberId\": \"{{memberId}}\",\n      \"breakfast\": 1,\n      \"lunch\": 2,\n      \"dinner\": 1,\n      \"guestMeals\": 0\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/meals/bulk",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"meals",
+								"bulk"
+							]
+						},
+						"description": "Daily-sheet bulk entry: one shared `date` plus 1-200 members, written in one transaction. Duplicate member ids are rejected with `400`. Any missing/cross-mess member (`404`), non-active member (`409`), CLOSED month (`409`) or locked existing cell (`409`) rolls back the whole batch. Responds `200` with `{ entries }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Meal",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"mealEntryId\", \"\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/meals/{{mealEntryId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"meals",
+								"{{mealEntryId}}"
+							]
+						},
+						"description": "Deletes one meal entry. The row is looked up by id AND the caller's mess, so a cross-mess id returns `404`. A CLOSED month or a locked entry returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Summary",
+			"item": [
+				{
+					"name": "Get Monthly Summary",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.month && body.data.month.name) {",
+									"        pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    }",
+									"    if (body.data.members && body.data.members.length) {",
+									"        const member = body.data.members.find((row) => row.status === \"ACTIVE\");",
+									"        if (member) {",
+									"            pm.collectionVariables.set(\"memberId\", member.memberId);",
+									"        }",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/summary?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"summary"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Returns the monthly meal summary for any ACTIVE member: total meals (including guest meals), total bazar, meal rate, per-member meal cost, bazar paid and meal balance, plus the greedy settlement transfers (AC 6.1.1-6.1.5). `?month=YYYY-MM` is optional and defaults to the current UTC month. ACTIVE members with no data are included at zero; non-active members with meals or bazar are included so the ledger sums to zero. Utility bills and deposits never affect this response. Money is rounded to 2 decimals and settlement transfers balance exactly; `totals.totalPositiveBalance` equals the sum of transfer amounts. When meals are zero but bazar is positive, `canSettle` is false and `settlement` is empty. A month with no row returns `200` with `month.exists = false` and zero totals without creating a month."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Get Dashboard",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.month && body.data.month.name) {",
+									"    pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/dashboard?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dashboard"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Quick-view Dashboard for any ACTIVE member. `?month=YYYY-MM` is optional and defaults to the current UTC month. The `meal` block is the Summary totals plus the caller's own member row, so it matches `GET /api/v1/summary` exactly. The `utility` block is the Utility Fund summary, so it matches `GET /api/v1/utilities/fund` exactly. `pendingMemberCount` is the PENDING member count for managers and `null` for non-managers. No settlement list is returned. GET never creates a month; an empty month returns zero meal and fund values."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Bazar",
+			"item": [
+				{
+					"name": "List Bazar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.month && body.data.month.name) {",
+									"        pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    }",
+									"    if (body.data.entries && body.data.entries.length) {",
+									"        pm.collectionVariables.set(\"bazarEntryId\", body.data.entries[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Lists bazar entries for one month with `houseTotal` and per-shopper totals (AC 4.1.2). `?month=YYYY-MM` is optional and defaults to the current UTC month. `from`/`to` are optional inclusive date filters inside the month; `shopperId` filters to one member. Ordering is `bazarDate` then `createdAt`, ascending. A month with no row still returns `200` with `month.exists = false` and zero totals — GET never creates a month. Any ACTIVE member can read. The test script stores the selected month and the first entry id."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Bazar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.entry && body.data.entry.id) {",
+									"    pm.collectionVariables.set(\"bazarEntryId\", body.data.entry.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Weekly grocery\",\n  \"items\": \"rice, chicken, oil\",\n  \"amount\": 2450.5,\n  \"bazarDate\": \"{{entryDate}}\",\n  \"shopperId\": \"{{memberId}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar"
+							]
+						},
+						"description": "Any ACTIVE member can record a bazar trip. `title` is optional and defaults to `\"Bazar\"`; `items` is optional free text. `amount` must be finite, `> 0`, at most 2 decimals and max `99,999,999.99`. `shopperId` must be an ACTIVE member of the caller's mess (`404` cross-mess, `409` non-active). The month is derived from `bazarDate` and auto-created on first write; a CLOSED month returns `409`. `addedById` is the caller and `paidFromMessFund` is forced `false` — neither is accepted from the body. Run Get Meal Grid first so `{{memberId}}` is populated, and set `{{entryDate}}` to a date in the selected month. Responds `201` with `{ entry }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Bazar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.entry && body.data.entry.id) {",
+									"    pm.collectionVariables.set(\"bazarEntryId\", body.data.entry.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Weekly grocery (revised)\",\n  \"items\": \"rice, chicken, oil, eggs\",\n  \"amount\": 2600.5\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar/{{bazarEntryId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar",
+								"{{bazarEntryId}}"
+							]
+						},
+						"description": "Partial update; at least one of `title`, `items`, `amount`, `bazarDate`, `shopperId` is required. `items: null` clears the text. Changing `bazarDate` across a month boundary moves the entry to the target month — both the old and target months must be ACTIVE (`409` otherwise). A cross-mess id returns `404`. `addedById` and `paidFromMessFund` cannot be changed. Responds `200` with `{ entry }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Bazar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"bazarEntryId\", \"\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bazar/{{bazarEntryId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"bazar",
+								"{{bazarEntryId}}"
+							]
+						},
+						"description": "Deletes one bazar entry. The row is looked up by id AND the caller's mess, so a cross-mess id returns `404`. A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Utilities",
+			"item": [
+				{
+					"name": "List Utilities",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.month && body.data.month.name) {",
+									"        pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    }",
+									"    if (body.data.bills && body.data.bills.length) {",
+									"        pm.collectionVariables.set(\"billId\", body.data.bills[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Lists utility bills for one month plus totals (AC 5.1.2, AC 5.1.3). `?month=YYYY-MM` is optional and defaults to the current UTC month. `totals` contains `total`, `paid`, `unpaid`, `activeMemberCount` and `perPersonShare` (formula U1: total ÷ ACTIVE members, rounded to 2 decimals, `0` when there are no active members). A month with no row still returns `200` with `month.exists = false` and zero totals. GET never creates a month. Utility data never affects meals, bazar or settlement. The test script stores the selected month and the first bill id."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Utility Bill",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.bill && body.data.bill.id) {",
+									"    pm.collectionVariables.set(\"billId\", body.data.bill.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"month\": \"{{month}}\",\n  \"category\": \"ELECTRICITY\",\n  \"title\": \"October electricity\",\n  \"amount\": 3200,\n  \"dueDate\": \"{{entryDate}}\",\n  \"notes\": \"Paid from the utility fund\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities"
+							]
+						},
+						"description": "Any ACTIVE member can add a bill. `month` is required because bills have no natural date; the month is auto-created on first write and a CLOSED month returns `409`. `category` defaults to `OTHER`; `splitType` defaults to `EQUAL` and `CUSTOM_WEIGHT` is rejected with `400`. `dueDate` and `notes` may be `null`. New bills are always unpaid; payment state changes only through `PATCH /:id/paid`. `paymentId`, `receiptUrl`, `paidAt` and `paidById` are never accepted, and `addedById` is the caller. Responds `201` with `{ bill }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Utility Bill",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.bill && body.data.bill.id) {",
+									"    pm.collectionVariables.set(\"billId\", body.data.bill.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"October electricity (revised)\",\n  \"amount\": 3350,\n  \"notes\": \"Meter reading updated\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/{{billId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"{{billId}}"
+							]
+						},
+						"description": "Partial update of one bill; at least one of `category`, `title`, `amount`, `splitType`, `dueDate`, `notes` is required. `dueDate` and `notes` accept `null` to clear. A bill cannot move between months here — delete and recreate if the month is wrong. Payment fields are not editable. A cross-mess id returns `404` and a CLOSED month returns `409`. Responds `200` with `{ bill }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Utility Bill Paid",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"isPaid\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/{{billId}}/paid",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"{{billId}}",
+								"paid"
+							]
+						},
+						"description": "Marks a bill paid: `isPaid = true`, `paidAt = now`, `paidById = caller`. Kept as one endpoint so `isPaid` and `paidAt` always agree with the DB CHECK constraint. A CLOSED month returns `409`. Responds `200` with `{ bill }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Utility Bill Unpaid",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"isPaid\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/{{billId}}/paid",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"{{billId}}",
+								"paid"
+							]
+						},
+						"description": "Marks a bill unpaid and clears `paidAt` and `paidById` together, so the DB CHECK constraint stays satisfied. A CLOSED month returns `409`. Responds `200` with `{ bill }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Utility Bill",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"billId\", \"\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/{{billId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"{{billId}}"
+							]
+						},
+						"description": "Deletes one utility bill. Scoped by id AND the caller's mess (`404` cross-mess). A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Utility Fund",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.month && body.data.month.name) {",
+									"    pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Returns the Utility Fund card for any ACTIVE member (AC 5.2.2, AC 5.2.3). `?month=YYYY-MM` is optional and defaults to the current UTC month. `totalDeposits` sums all deposits; `totalPaidBills` sums only bills where `isPaid = true`; `balance = totalDeposits - totalPaidBills`; `needsReplenishment` is true when the balance is `<= 0`, including an empty month. GET never creates a month. Utility data never affects meal rate, meal balances or settlement."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Replenishment Estimate",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/replenishment-estimate?perMember=500",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"replenishment-estimate"
+							],
+							"query": [
+								{
+									"key": "perMember",
+									"value": "500"
+								}
+							]
+						},
+						"description": "Manager only. Formula U3: `totalExpected = round2(perMember × count of ACTIVE members)`. `perMember` is required, greater than 0, and at most two decimal places. Zero active members returns `0`. This endpoint does not subtract the current fund balance."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Fund Deposits",
+			"item": [
+				{
+					"name": "List Fund Deposits",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data) {",
+									"    if (body.data.month && body.data.month.name) {",
+									"        pm.collectionVariables.set(\"month\", body.data.month.name);",
+									"    }",
+									"    if (body.data.deposits && body.data.deposits.length) {",
+									"        pm.collectionVariables.set(\"depositId\", body.data.deposits[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund-deposits?month={{month}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund-deposits"
+							],
+							"query": [
+								{
+									"key": "month",
+									"value": "{{month}}"
+								}
+							]
+						},
+						"description": "Lists utility fund deposits for one month with the total and per-member totals. Any ACTIVE member can read this for transparency. `?month=YYYY-MM` is optional and defaults to the current UTC month; a month with no row still returns `200` with `month.exists = false`, an empty list and `total: 0`. GET never creates a month. Multiple deposits per member and month are allowed. The test script stores the selected month and the first deposit id."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Fund Deposit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.deposit && body.data.deposit.id) {",
+									"    pm.collectionVariables.set(\"depositId\", body.data.deposit.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"amount\": 1000,\n  \"date\": \"{{entryDate}}\",\n  \"note\": \"October utility advance\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund-deposits",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund-deposits"
+							]
+						},
+						"description": "Manager only (`403` for a non-manager). Records a utility fund deposit for an ACTIVE member of the caller's mess (`404` cross-mess, `409` non-active). `date` is optional and defaults to today in UTC; the month is derived from it and auto-created on first write. A CLOSED month returns `409`. `receivedById` is the caller and is never accepted from the body. Multiple deposits per member per month are allowed. Run Get Meal Grid first so `{{memberId}}` is populated. Responds `201` with `{ deposit }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Fund Deposit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"",
+									"if (body && body.data && body.data.deposit && body.data.deposit.id) {",
+									"    pm.collectionVariables.set(\"depositId\", body.data.deposit.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 1200,\n  \"note\": \"October utility advance (revised)\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund-deposits/{{depositId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund-deposits",
+								"{{depositId}}"
+							]
+						},
+						"description": "Manager only. Partial update of one deposit; at least one of `memberId`, `amount`, `date`, `note` is required. `note: null` clears the note. Changing `date` across a month boundary moves the deposit to the target month — both months must be ACTIVE (`409` otherwise). `receivedById` never changes. A cross-mess id returns `404`. Responds `200` with `{ deposit }`."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Fund Deposit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"depositId\", \"\");"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/utilities/fund-deposits/{{depositId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"utilities",
+								"fund-deposits",
+								"{{depositId}}"
+							]
+						},
+						"description": "Manager only. Deletes one deposit, scoped by id AND the caller's mess (`404` cross-mess). A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "General",
 			"item": [
 				{
@@ -1053,7 +2156,7 @@
 								""
 							]
 						},
-						"description": "Basic health/welcome route. Returns `{ success: true, message: \"Welcome to MessTally\" }`."
+						"description": "Basic health/welcome route. Responds `200` with `{ success: true, message: \"Welcome to MessTally\" }`; it is registered directly on the app, so there is no `statusCode`/`data` wrapper."
 					},
 					"response": []
 				}
@@ -1092,6 +2195,11 @@
 			"type": "string"
 		},
 		{
+			"key": "activeMessId",
+			"value": "",
+			"type": "string"
+		},
+		{
 			"key": "joinedMessId",
 			"value": "",
 			"type": "string"
@@ -1114,6 +2222,46 @@
 		{
 			"key": "pendingMemberId",
 			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "month",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "monthId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "mealDate",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "mealEntryId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "bazarEntryId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "billId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "depositId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "entryDate",
+			"value": "2026-10-23",
 			"type": "string"
 		}
 	]

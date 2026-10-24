@@ -48,12 +48,39 @@ export const globalErrorHandler = async (
 			statusCode = httpStatus.SERVICE_UNAVAILABLE;
 			errorMessage =
 				"The database is temporarily unavailable. Please try again in a moment.";
+		} else if (err.code === "P2000") {
+			statusCode = httpStatus.BAD_REQUEST;
+			errorMessage = "The provided value is too long for the database field.";
+		} else if (err.code === "P2001") {
+			statusCode = httpStatus.NOT_FOUND;
+			errorMessage = "The requested record was not found.";
 		} else if (err.code === "P2002") {
 			(statusCode = httpStatus.BAD_REQUEST),
 				(errorMessage = "Duplicate Key Error");
 		} else if (err.code === "P2003") {
 			(statusCode = httpStatus.BAD_REQUEST),
 				(errorMessage = "Foreign key constraint failed");
+		} else if (err.code === "P2011") {
+			statusCode = httpStatus.BAD_REQUEST;
+			errorMessage = "A required database field cannot be null.";
+		} else if (err.code === "P2012") {
+			statusCode = httpStatus.BAD_REQUEST;
+			errorMessage = "A required value is missing.";
+		} else if (err.code === "P2014") {
+			statusCode = httpStatus.BAD_REQUEST;
+			errorMessage = "The requested change would violate a required relation.";
+		} else if (err.code === "P2022") {
+			statusCode = httpStatus.INTERNAL_SERVER_ERROR;
+			errorMessage =
+				"The database schema is out of sync with the application. Please try again later.";
+		} else if (err.code === "P2021" || err.code === "P2023") {
+			statusCode = httpStatus.INTERNAL_SERVER_ERROR;
+			errorMessage =
+				"The database schema is incompatible with the application. Please try again later.";
+		} else if (err.code === "P2034") {
+			statusCode = httpStatus.CONFLICT;
+			errorMessage =
+				"The database transaction conflicted with another operation. Please try again.";
 		} else if (err.code === "P2025") {
 			(statusCode = httpStatus.BAD_REQUEST),
 				(errorMessage =

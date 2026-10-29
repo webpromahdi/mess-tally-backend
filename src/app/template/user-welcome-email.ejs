@@ -1,0 +1,311 @@
+<%#
+    MessTally — welcome email
+    Expected locals: name, email, appUrl
+%>
+<%
+    const recipientName = (typeof name !== "undefined" && name) ? name : "there";
+    const recipientEmail = (typeof email !== "undefined" && email) ? email : "your email";
+    const recipientAppUrl = (typeof appUrl !== "undefined" && appUrl) ? appUrl : "http://localhost:3000";
+%>
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <title>Welcome to MessTally</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        /* Client resets */
+        body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+        a { text-decoration: none; }
+
+        /* Preheader: preview text only */
+        .preheader {
+            display: none !important;
+            visibility: hidden;
+            opacity: 0;
+            color: transparent;
+            height: 0;
+            width: 0;
+            max-height: 0;
+            max-width: 0;
+            overflow: hidden;
+            mso-hide: all;
+            font-size: 1px;
+            line-height: 1px;
+        }
+
+        /* Mobile */
+        @media only screen and (max-width: 620px) {
+            .mt-canvas-pad { padding: 20px 10px !important; }
+            .mt-shell { width: 100% !important; }
+            .mt-head { padding: 22px 24px !important; }
+            .mt-body { padding: 32px 24px 8px !important; }
+            .mt-verified-pad { padding: 18px 24px 0 !important; }
+            .mt-cta-wrap { padding: 26px 24px 0 !important; }
+            .mt-steps { padding: 26px 24px 0 !important; }
+            .mt-tip-wrap { padding: 22px 24px 30px !important; }
+            .mt-footer { padding: 22px 24px !important; }
+            .mt-h1 { font-size: 26px !important; line-height: 34px !important; }
+            .mt-cta { display: block !important; width: 100% !important; box-sizing: border-box !important; }
+        }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            .mt-canvas { background-color: #0B1413 !important; }
+            .mt-shell { background-color: #111C1A !important; }
+            .mt-body, .mt-h1, .mt-text { color: #E6EFEC !important; }
+            .mt-footer { background-color: #0D1816 !important; border-top-color: #1F302C !important; }
+            .mt-verified { background-color: #152420 !important; border-color: #2A4A42 !important; }
+            .mt-verified-title { color: #E6EFEC !important; }
+            .mt-verified-mail { color: #A6B8B3 !important; }
+            .mt-badge { background-color: #1E3A32 !important; color: #B7E3D4 !important; }
+            .mt-step-title { color: #E6EFEC !important; }
+            .mt-step-text { color: #A6B8B3 !important; }
+            .mt-step-num { background-color: #1E3A32 !important; color: #B7E3D4 !important; }
+            .mt-tip { background-color: #13241F !important; border-left-color: #12796A !important; }
+            .mt-tip-title { color: #9FD8C7 !important; }
+            .mt-tip-text { color: #A6B8B3 !important; }
+            .mt-divider { background-color: #243532 !important; }
+            .mt-foot-text { color: #7E908B !important; }
+            .mt-foot-link { color: #9FD8C7 !important; }
+        }
+    </style>
+</head>
+<body class="mt-canvas" style="margin:0; padding:0; background-color:#EAF2EF; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+    <!-- Preview text (shown in inbox list, hidden in the email body) -->
+    <div class="preheader">
+        You're in, <%= recipientName %>. Your MessTally account is verified and ready.
+    </div>
+
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="mt-canvas" style="background-color:#EAF2EF;">
+        <tr>
+            <td align="center" class="mt-canvas-pad" style="padding:36px 14px;">
+
+                <!--[if mso]>
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600"><tr><td>
+                <![endif]-->
+
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" class="mt-shell" style="width:100%; max-width:600px; background-color:#FFFFFF; border-radius:18px; overflow:hidden; box-shadow:0 18px 40px rgba(10,42,38,0.10);">
+
+                    <!-- Brand header -->
+                    <tr>
+                        <td class="mt-head" style="background-color:#0A2A26; padding:26px 40px;">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td align="left" valign="middle" width="44" style="width:44px;">
+                                        <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td width="38" height="38" align="center" valign="middle" style="width:38px; height:38px; background-color:#F2B01E; border-radius:11px; font-family:Georgia,'Times New Roman',serif; font-size:20px; line-height:38px; font-weight:bold; color:#0A2A26; mso-line-height-rule:exactly;">
+                                                    M
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td align="left" valign="middle" style="padding-left:12px;">
+                                        <div style="font-family:Georgia,'Times New Roman',serif; font-size:20px; line-height:24px; font-weight:bold; color:#FFFFFF; letter-spacing:0.2px; mso-line-height-rule:exactly;">
+                                            MessTally
+                                        </div>
+                                        <div style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; letter-spacing:1.6px; text-transform:uppercase; color:#8FB7AC; padding-top:3px; mso-line-height-rule:exactly;">
+                                            Mess management, tallied
+                                        </div>
+                                    </td>
+                                    <td align="right" valign="middle">
+                                        <span style="display:inline-block; border:1px solid #2E5B51; border-radius:999px; padding:5px 10px; font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; letter-spacing:1.4px; text-transform:uppercase; color:#9CC3B7; white-space:nowrap;">
+                                            Welcome
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Accent rule -->
+                    <tr>
+                        <td height="4" style="height:4px; line-height:4px; font-size:0; background-color:#F2B01E;">&nbsp;</td>
+                    </tr>
+
+                    <!-- Hero -->
+                    <tr>
+                        <td class="mt-body" style="padding:40px 40px 6px;">
+                            <div style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; letter-spacing:2px; text-transform:uppercase; color:#12796A; padding-bottom:12px;">
+                                You're on the tally
+                            </div>
+                            <h1 class="mt-h1" style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:29px; line-height:38px; font-weight:normal; color:#13201E; letter-spacing:-0.2px;">
+                                Welcome aboard, <%= recipientName %>.
+                            </h1>
+                            <p class="mt-text" style="margin:16px 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px; color:#3E4F4B;">
+                                Your email is verified and your account is live. MessTally now keeps the meal counts, the member list and the month-end dues in one place — and they'll all agree with each other.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Verified strip -->
+                    <tr>
+                        <td class="mt-verified-pad" style="padding:24px 40px 0;">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="mt-verified" style="background-color:#F3FAF7; border:1px solid #DCE7E3; border-radius:14px;">
+                                <tr>
+                                    <td width="42" valign="middle" style="width:42px; padding:16px 0 16px 18px;">
+                                        <div style="width:26px; height:26px; background-color:#12796A; border-radius:999px; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:26px; font-weight:bold; color:#FFFFFF; text-align:center; mso-line-height-rule:exactly;">
+                                            &#10003;
+                                        </div>
+                                    </td>
+                                    <td valign="middle" style="padding:16px 10px 16px 12px;">
+                                        <div class="mt-verified-title" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:18px; font-weight:bold; color:#13201E;">
+                                            Email verified
+                                        </div>
+                                        <div class="mt-verified-mail" style="font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#5B6B68; padding-top:2px;">
+                                            <%= recipientEmail %>
+                                        </div>
+                                    </td>
+                                    <td align="right" valign="middle" style="padding:16px 18px 16px 0;">
+                                        <span class="mt-badge" style="display:inline-block; background-color:#E1F1EA; border-radius:999px; padding:4px 10px; font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; letter-spacing:0.4px; color:#0F5B4F; white-space:nowrap;">
+                                            Active
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <% if (appUrl) { %>
+                    <!-- Primary action -->
+                    <tr>
+                        <td class="mt-cta-wrap" align="left" style="padding:28px 40px 0;">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td align="center" bgcolor="#0F5B4F" style="background-color:#0F5B4F; border-radius:12px;">
+                                        <a class="mt-cta" href="<%= recipientAppUrl %>" style="display:inline-block; padding:15px 30px; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:20px; font-weight:bold; color:#FFFFFF; letter-spacing:0.2px; border-radius:12px; text-decoration:none;">
+                                            Open MessTally
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <% } %>
+
+                    <!-- Start here -->
+                    <tr>
+                        <td class="mt-steps" style="padding:28px 40px 0;">
+                            <div style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; letter-spacing:2px; text-transform:uppercase; color:#8A9A96; padding-bottom:18px;">
+                                Start here
+                            </div>
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td width="34" valign="top" style="width:34px; padding-bottom:18px;">
+                                        <div class="mt-step-num" style="width:26px; height:26px; background-color:#E1F1EA; border-radius:999px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:26px; font-weight:bold; color:#0F5B4F; text-align:center; mso-line-height-rule:exactly;">
+                                            1
+                                        </div>
+                                    </td>
+                                    <td valign="top" style="padding-bottom:18px;">
+                                        <div class="mt-step-title" style="font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:20px; font-weight:bold; color:#13201E;">
+                                            Set up your mess
+                                        </div>
+                                        <div class="mt-step-text" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#5B6B68; padding-top:3px;">
+                                            Add the mess name, meal timings and billing cycle — every later number is built on these.
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td width="34" valign="top" style="width:34px; padding-bottom:18px;">
+                                        <div class="mt-step-num" style="width:26px; height:26px; background-color:#E1F1EA; border-radius:999px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:26px; font-weight:bold; color:#0F5B4F; text-align:center; mso-line-height-rule:exactly;">
+                                            2
+                                        </div>
+                                    </td>
+                                    <td valign="top" style="padding-bottom:18px;">
+                                        <div class="mt-step-title" style="font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:20px; font-weight:bold; color:#13201E;">
+                                            Add your members
+                                        </div>
+                                        <div class="mt-step-text" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#5B6B68; padding-top:3px;">
+                                            Invite the people who eat there. Each one gets their own running tally.
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td width="34" valign="top" style="width:34px;">
+                                        <div class="mt-step-num" style="width:26px; height:26px; background-color:#E1F1EA; border-radius:999px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:26px; font-weight:bold; color:#0F5B4F; text-align:center; mso-line-height-rule:exactly;">
+                                            3
+                                        </div>
+                                    </td>
+                                    <td valign="top">
+                                        <div class="mt-step-title" style="font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:20px; font-weight:bold; color:#13201E;">
+                                            Log the first meal
+                                        </div>
+                                        <div class="mt-step-text" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#5B6B68; padding-top:3px;">
+                                            Mark today's meals and watch the month's dues update as you go.
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Tip -->
+                    <tr>
+                        <td class="mt-tip-wrap" style="padding:24px 40px 34px;">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="mt-tip" style="background-color:#EEF7F3; border-left:3px solid #12796A; border-radius:10px;">
+                                <tr>
+                                    <td style="padding:16px 18px;">
+                                        <div class="mt-tip-title" style="font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; font-weight:bold; color:#0F5B4F; letter-spacing:0.3px;">
+                                            A good first move
+                                        </div>
+                                        <div class="mt-tip-text" style="font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:19px; color:#4A5B57; padding-top:5px;">
+                                            Set up the mess before inviting members — meal rates and billing cycles come from it, so everyone's tally starts on the right footing.
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="mt-footer" style="background-color:#F7FBFA; border-top:1px solid #E4EDEA; padding:26px 40px 30px;">
+                            <div class="mt-foot-text" style="font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:19px; color:#6B7B77;">
+                                You're receiving this because <span class="mt-foot-link" style="color:#0F5B4F; font-weight:bold;"><%= recipientEmail %></span> was verified on MessTally. No further action is needed.
+                            </div>
+                            <div class="mt-divider" style="height:1px; line-height:1px; font-size:0; background-color:#E4EDEA; margin:16px 0;">&nbsp;</div>
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td align="left" valign="middle" class="mt-foot-text" style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:17px; color:#8A9A96;">
+                                        <span style="font-family:Georgia,'Times New Roman',serif; font-size:12px; color:#0F5B4F; font-weight:bold;">MessTally</span>
+                                        &nbsp;·&nbsp; Mess management, tallied.
+                                    </td>
+                                    <td align="right" valign="middle" class="mt-foot-text" style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:17px; color:#A3B1AD;">
+                                        Automated message
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                </table>
+
+                <!--[if mso]>
+                </td></tr></table>
+                <![endif]-->
+
+                <div class="mt-foot-text" style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:18px; color:#9AA9A5; text-align:center; padding:18px 20px 0;">
+                    Questions? Reply to this email and a human will pick it up.
+                </div>
+
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

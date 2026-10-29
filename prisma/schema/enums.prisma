@@ -10,3 +10,57 @@ enum Status {
   SUSPENDED
   DELETED
 }
+
+enum MessRole {
+  OWNER
+  MEMBER
+}
+
+enum MemberStatus {
+  PENDING
+  ACTIVE
+  LEFT
+  REJECTED
+}
+
+enum MessPlan {
+  FREE
+  PRO
+}
+
+enum MonthStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum UtilityCategory {
+  RENT
+  ELECTRICITY
+  GAS
+  WATER
+  WIFI
+  COOK_SALARY
+  GARBAGE_GUARD
+  SUBSCRIPTION
+  OTHER
+}
+
+enum UtilitySplitType {
+  EQUAL
+  CUSTOM_WEIGHT
+}
+
+enum PaymentType {
+  SUBSCRIPTION_MONTHLY
+  SUBSCRIPTION_HALF_YEARLY
+  SUBSCRIPTION_YEARLY
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}

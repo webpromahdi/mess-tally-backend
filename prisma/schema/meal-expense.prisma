@@ -1,0 +1,25 @@
+model MealExpense {
+  id               String   @id @default(uuid())
+  messMonthId      String
+  title            String
+  items            String?
+  amount           Decimal  @db.Decimal(10, 2)
+  bazarDate        DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+  receiptUrl       String?
+  receiptPublicId  String?  @map("receipt_public_id")
+  paidFromMessFund Boolean  @default(false)
+  shopperId        String
+  addedById        String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  messMonth MessMonth  @relation(fields: [messMonthId], references: [id], onDelete: Cascade)
+  shopper   MessMember @relation("ExpenseShopper", fields: [shopperId], references: [id], onDelete: Restrict)
+  addedBy   MessMember @relation("ExpenseAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+
+  @@index([messMonthId, bazarDate])
+  @@index([shopperId])
+  @@map("meal_expense")
+}

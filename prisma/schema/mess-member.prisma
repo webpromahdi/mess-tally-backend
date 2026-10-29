@@ -1,0 +1,33 @@
+model MessMember {
+  id              String       @id @default(uuid())
+  userId          String
+  messId          String
+  role            MessRole     @default(MEMBER)
+  status          MemberStatus @default(PENDING)
+  isManager       Boolean      @default(false)
+  rentShare       Float        @default(1.0)
+  fixedRentAmount Decimal?     @db.Decimal(10, 2)
+  joinedAt        DateTime     @default(now())
+  leftAt          DateTime?
+  updatedAt       DateTime     @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  mess Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
+
+  managedMonths      MessMonth[]      @relation("MonthManager")
+  closedMonths       MessMonth[]      @relation("MonthClosedBy")
+  mealEntries        MealEntry[]      @relation("MealEntryMember")
+  mealEntriesUpdated MealEntry[]      @relation("MealEntryUpdatedBy")
+  shoppedExpenses    MealExpense[]    @relation("ExpenseShopper")
+  addedExpenses      MealExpense[]    @relation("ExpenseAddedBy")
+  paidUtilities      UtilityExpense[] @relation("UtilityPaidBy")
+  addedUtilities     UtilityExpense[] @relation("UtilityAddedBy")
+  deposits           Deposit[]        @relation("DepositMember")
+  receivedDeposits   Deposit[]        @relation("DepositReceivedBy")
+  saasPayments       Payment[]        @relation("MemberSaasPayments")
+
+  @@unique([userId, messId], map: "mess_member_user_mess_key")
+  @@index([messId, status])
+  @@map("mess_member")
+}

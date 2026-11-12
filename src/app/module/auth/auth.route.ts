@@ -50,5 +50,6 @@ router.get(
 	authController.getMe,
 );
 router.post("/refresh-token", authController.refreshToken);
+router.post("/logout", authController.logout);
 
 export const AuthRoutes = router;

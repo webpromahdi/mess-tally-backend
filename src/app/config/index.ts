@@ -47,5 +47,5 @@ export default {
 	ai_model: process.env.AI_MODEL || "llama-3.3-70b-versatile",
 
 	// Frontend page bKash redirects back to after the callback.
-	frontend_billing_path: process.env.FRONTEND_BILLING_PATH || "/settings/billing",
+	frontend_billing_path: process.env.FRONTEND_BILLING_PATH || "/dashboard/settings",
 };

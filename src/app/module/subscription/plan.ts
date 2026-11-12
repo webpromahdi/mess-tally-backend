@@ -5,6 +5,7 @@ import { AppError } from "../../utils/AppError";
 import { addDays } from "../../utils/time";
 
 export const FREE_ACTIVE_MEMBER_LIMIT = 5;
+export const PRO_ACTIVE_MEMBER_LIMIT = 100;
 
 export type TPlanKey = "MONTHLY" | "HALF_YEARLY" | "YEARLY";
 
@@ -76,7 +77,7 @@ export interface IPlanAccess {
 	plan: "FREE" | "PRO";
 	isPro: boolean;
 	planExpiresAt: Date | null;
-	limits: { maxActiveMembers: number | null };
+	limits: { maxActiveMembers: number };
 	features: {
 		bazarReceiptUploads: boolean;
 		selfServiceMeals: boolean;
@@ -95,7 +96,9 @@ export const getPlanAccess = (
 		plan: isPro ? "PRO" : "FREE",
 		isPro,
 		planExpiresAt: mess.planExpiresAt,
-		limits: { maxActiveMembers: isPro ? null : FREE_ACTIVE_MEMBER_LIMIT },
+		limits: {
+			maxActiveMembers: isPro ? PRO_ACTIVE_MEMBER_LIMIT : FREE_ACTIVE_MEMBER_LIMIT,
+		},
 		features: {
 			bazarReceiptUploads: isPro,
 			selfServiceMeals: isPro,

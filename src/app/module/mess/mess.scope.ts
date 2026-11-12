@@ -6,6 +6,7 @@ import { AppError } from "../../utils/AppError";
 import {
 	FREE_ACTIVE_MEMBER_LIMIT,
 	isProActive,
+	PRO_ACTIVE_MEMBER_LIMIT,
 } from "../subscription/plan";
 import type { TActiveMember } from "./mess.interface";
 
@@ -73,20 +74,20 @@ export const assertOwner = (member: TActiveMember) => {
 type TCapacityDb = Prisma.TransactionClient | typeof prisma;
 
 /**
- * FREE messes can hold at most `FREE_ACTIVE_MEMBER_LIMIT` ACTIVE members.
+ * FREE messes can hold at most `FREE_ACTIVE_MEMBER_LIMIT` ACTIVE members and
+ * PRO messes at most `PRO_ACTIVE_MEMBER_LIMIT`.
  *
  * Called inside a transaction *before* a member becomes ACTIVE. The mess row
  * is locked first so two concurrent approvals cannot both pass the count.
- * PRO is uncapped, and an expired PRO that has grown past the limit is
+ * A mess that has grown past its current limit (e.g. an expired PRO) is
  * grandfathered: existing members stay, only further activations are blocked.
  */
 export const assertActiveMemberCapacity = async (
 	db: TCapacityDb,
 	mess: Pick<TActiveMember["mess"], "id" | "plan" | "planExpiresAt">,
 ): Promise<void> => {
-	if (isProActive(mess)) {
-		return;
-	}
+	const isPro = isProActive(mess);
+	const limit = isPro ? PRO_ACTIVE_MEMBER_LIMIT : FREE_ACTIVE_MEMBER_LIMIT;
 
 	await db.$queryRaw`SELECT id FROM "mess" WHERE id = ${mess.id} FOR UPDATE`;
 
@@ -94,10 +95,12 @@ export const assertActiveMemberCapacity = async (
 		where: { messId: mess.id, status: MemberStatus.ACTIVE },
 	});
 
-	if (activeMembers >= FREE_ACTIVE_MEMBER_LIMIT) {
+	if (activeMembers >= limit) {
 		throw new AppError(
 			httpStatus.CONFLICT,
-			`The FREE plan allows up to ${FREE_ACTIVE_MEMBER_LIMIT} active members. Upgrade to PRO for unlimited members.`,
+			isPro
+				? `The PRO plan allows up to ${PRO_ACTIVE_MEMBER_LIMIT} active members.`
+				: `The FREE plan allows up to ${FREE_ACTIVE_MEMBER_LIMIT} active members. Upgrade to PRO for up to ${PRO_ACTIVE_MEMBER_LIMIT} members.`,
 		);
 	}
 };

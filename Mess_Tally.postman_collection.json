@@ -1609,8 +1609,7 @@
 						"description": "Any ACTIVE member. Returns the standard API envelope whose `data` is exactly the same Summary response as `GET /api/v1/summary`, including `isLocked`. A CLOSED month exports the locked snapshot. Utility values are never included."
 					},
 					"response": []
-				}
-				,
+				},
 				{
 					"name": "Download Member Statement PDF",
 					"event": [],
@@ -1866,8 +1865,7 @@
 						"description": "Deletes one bazar entry. The row is looked up by id AND the caller's mess, so a cross-mess id returns `404`. A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
 					},
 					"response": []
-				}
-				,
+				},
 				{
 					"name": "Upload Bazar Receipt",
 					"event": [],
@@ -2714,6 +2712,342 @@
 			]
 		},
 		{
+			"name": "Admin",
+			"description": "Platform staff endpoints (ADMIN / SUPERADMIN). Seed the first account with `npm run seed:admin` (SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD in .env), then call Auth > Login with it. Not mess-scoped. See API.md \"Admin\" (#57-63).",
+			"item": [
+				{
+					"name": "Overview",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/overview",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"overview"
+							]
+						},
+						"description": "Totals for users, messes and revenue (net of refunds)."
+					},
+					"response": []
+				},
+				{
+					"name": "List Users",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users?search=&mess=&role=USER&status=ACTIVE&page=1&limit=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true,
+									"description": "Name or email"
+								},
+								{
+									"key": "mess",
+									"value": "",
+									"disabled": true,
+									"description": "Mess name"
+								},
+								{
+									"key": "role",
+									"value": "USER",
+									"disabled": true,
+									"description": "USER | ADMIN | SUPERADMIN"
+								},
+								{
+									"key": "status",
+									"value": "ACTIVE",
+									"disabled": true,
+									"description": "ACTIVE | INACTIVE | SUSPENDED | DELETED"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": false
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"disabled": false
+								}
+							]
+						},
+						"description": "Paginated users with platform role, status and mess memberships. `meta` holds pagination. Copy an id into {{adminUserId}}."
+					},
+					"response": []
+				},
+				{
+					"name": "Suspend User",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users/{{adminUserId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users",
+								"{{adminUserId}}",
+								"status"
+							]
+						},
+						"description": "Suspended users get 401 on their next request and cannot log in. 400 for your own account; 403 for a SUPERADMIN, or for an ADMIN target unless you are SUPERADMIN.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"SUSPENDED\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reactivate User",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users/{{adminUserId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users",
+								"{{adminUserId}}",
+								"status"
+							]
+						},
+						"description": "Lets a suspended user sign in again.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"ACTIVE\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change User Role",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users/{{adminUserId}}/role",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users",
+								"{{adminUserId}}",
+								"role"
+							]
+						},
+						"description": "SUPERADMIN only (403 otherwise). role: USER | ADMIN. The user must sign in again for the new role to apply.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"role\": \"ADMIN\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Messes",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/messes?search=&plan=PRO&subscriptionType=MONTHLY&page=1&limit=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"messes"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true,
+									"description": "Mess name or room code"
+								},
+								{
+									"key": "plan",
+									"value": "PRO",
+									"disabled": true,
+									"description": "Effective plan: FREE | PRO"
+								},
+								{
+									"key": "subscriptionType",
+									"value": "MONTHLY",
+									"disabled": true,
+									"description": "Current paid period: MONTHLY | HALF_YEARLY | YEARLY"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": false
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"disabled": false
+								}
+							]
+						},
+						"description": "Paginated messes with effective plan, current subscription type, members, owner/manager and total paid. Copy an id into {{adminMessId}}."
+					},
+					"response": []
+				},
+				{
+					"name": "Grant / Extend PRO",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/messes/{{adminMessId}}/plan",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"messes",
+								"{{adminMessId}}",
+								"plan"
+							]
+						},
+						"description": "days: 1-730. Extends from the current expiry when PRO is active. No payment is recorded, so it is not revenue.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"days\": 30\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Revenue",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/revenue?from=2026-01-01&to=2026-12-31&page=1&limit=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"revenue"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "2026-01-01",
+									"disabled": true,
+									"description": "YYYY-MM-DD, inclusive"
+								},
+								{
+									"key": "to",
+									"value": "2026-12-31",
+									"disabled": true,
+									"description": "YYYY-MM-DD, inclusive"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": false
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"disabled": false
+								}
+							]
+						},
+						"description": "Totals, by-type breakdown, monthly series and paginated payments. Default range: the last 12 months."
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "General",
 			"item": [
 				{
@@ -2856,6 +3190,16 @@
 		},
 		{
 			"key": "bkashPaymentId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "adminUserId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "adminMessId",
 			"value": "",
 			"type": "string"
 		}

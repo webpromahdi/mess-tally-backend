@@ -59,3 +59,23 @@ export const calculateSummary = (
 		members: calculations,
 	};
 };
+
+/**
+ * How many more days a member's meal balance covers at their average daily
+ * meal cost so far this month. 0 when the balance is used up (they owe), null
+ * when there is no usage yet to average.
+ */
+export const estimateDaysLeft = (
+	mealBalance: number,
+	totalMeals: number,
+	daysElapsed: number,
+	mealRate: number,
+): number | null => {
+	if (mealBalance <= 0) {
+		return 0;
+	}
+
+	const dailyCost = daysElapsed > 0 ? (totalMeals / daysElapsed) * mealRate : 0;
+
+	return dailyCost > 0 ? Math.floor(mealBalance / dailyCost) : null;
+};

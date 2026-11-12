@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a8f6c2d4-5b1e-4f3a-9c7d-2e6b8a1f0c93",
 		"name": "Mess_Tally",
-		"description": "Postman collection for the MessTally backend. It mirrors every route currently mounted in `src/app.ts`: `/api/v1/auth`, `/api/v1/profile`, `/api/v1/mess` (including the `/mess/members` and `/mess/leave` routes), `/api/v1/months`, `/api/v1/meals`, `/api/v1/bazar`, the utilities and utility fund deposit routes, `/api/v1/summary` (including the CSV/JSON export), `/api/v1/dashboard`, and the root health route. Planned AI routes are intentionally absent.\n\nBase URL comes from the `baseUrl` collection variable (default `http://localhost:8000`, matching `PORT` in `.env`).\n\nAuth flow: Register sends an OTP, Verify Email creates the user and returns tokens, and Login/Refresh Token return a fresh token pair. Login, Verify Email, and Refresh Token set the `accessToken` and `refreshToken` httpOnly cookies; the Login and Refresh Token test scripts also copy the tokens plus `activeMessId`/`mess` into collection variables.\n\nMess scope: tokens carry identity only (`userId`, `name`, `email`, `role`). There is no `messId` claim and no mess-switch endpoint. The server reads `user.activeMessId`, verifies the matching `mess_member` row is `ACTIVE`, and only then runs the mess-scoped action. Create Mess, Join Mess, and Approve Member maintain that pointer; Leave Mess and Remove Member clear it.\n\nProtected requests accept the access token from the cookie jar or from the `Authorization: Bearer {{accessToken}}` header. Create Mess, Join Mess, and My Messes require `Role.USER`; the other protected routes accept any authenticated role, but mess-scoped actions still need a valid ACTIVE membership. `Refresh Token` reads the `refreshToken` httpOnly cookie, so run Login or Verify Email earlier in the same Postman session.",
+		"description": "Postman collection for the MessTally backend. It mirrors every route currently mounted in `src/app.ts`: `/api/v1/auth`, `/api/v1/profile`, `/api/v1/mess` (including the `/mess/members` and `/mess/leave` routes), `/api/v1/months`, `/api/v1/meals`, `/api/v1/bazar`, the utilities and utility fund deposit routes, `/api/v1/summary` (including the CSV/JSON export), `/api/v1/dashboard`, `/api/v1/subscription` (including the public bKash callback), `/api/v1/ai` (TallyBot chat), and the root health route.\n\nBase URL comes from the `baseUrl` collection variable (default `http://localhost:8000`, matching `PORT` in `.env`).\n\nAuth flow: Register sends an OTP, Verify Email creates the user and returns tokens, and Login/Refresh Token return a fresh token pair. Login, Verify Email, and Refresh Token set the `accessToken` and `refreshToken` httpOnly cookies; the Login and Refresh Token test scripts also copy the tokens plus `activeMessId`/`mess` into collection variables.\n\nMess scope: tokens carry identity only (`userId`, `name`, `email`, `role`). There is no `messId` claim and no mess-switch endpoint. The server reads `user.activeMessId`, verifies the matching `mess_member` row is `ACTIVE`, and only then runs the mess-scoped action. Create Mess, Join Mess, and Approve Member maintain that pointer; Leave Mess and Remove Member clear it.\n\nProtected requests accept the access token from the cookie jar or from the `Authorization: Bearer {{accessToken}}` header. Create Mess, Join Mess, and My Messes require `Role.USER`; the other protected routes accept any authenticated role, but mess-scoped actions still need a valid ACTIVE membership. `Refresh Token` reads the `refreshToken` httpOnly cookie, so run Login or Verify Email earlier in the same Postman session.\n\nTallyBot (`POST /ai/chat`) is read-only: it answers from the caller's mess data through read-only tools, needs an ACTIVE membership, and is limited to 20 messages per minute per user.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -1609,8 +1609,7 @@
 						"description": "Any ACTIVE member. Returns the standard API envelope whose `data` is exactly the same Summary response as `GET /api/v1/summary`, including `isLocked`. A CLOSED month exports the locked snapshot. Utility values are never included."
 					},
 					"response": []
-				}
-				,
+				},
 				{
 					"name": "Download Member Statement PDF",
 					"event": [],
@@ -1866,8 +1865,7 @@
 						"description": "Deletes one bazar entry. The row is looked up by id AND the caller's mess, so a cross-mess id returns `404`. A CLOSED month returns `409`. Responds `200` with `{ id, deleted: true }`."
 					},
 					"response": []
-				}
-				,
+				},
 				{
 					"name": "Upload Bazar Receipt",
 					"event": [],
@@ -2493,7 +2491,15 @@
 									"",
 									"if (body && body.data) {",
 									"    if (body.data.paymentId) pm.collectionVariables.set(\"subscriptionPaymentId\", body.data.paymentId);",
-									"    if (body.data.paymentURL) pm.collectionVariables.set(\"paymentURL\", body.data.paymentURL);",
+									"",
+									"    if (body.data.paymentURL) {",
+									"        pm.collectionVariables.set(\"paymentURL\", body.data.paymentURL);",
+									"",
+									"        // The bKash checkout URL carries the gateway paymentID the callback receives.",
+									"        const checkout = new URL(body.data.paymentURL);",
+									"        const bkashPaymentId = checkout.searchParams.get(\"paymentID\") || checkout.searchParams.get(\"paymentId\");",
+									"        if (bkashPaymentId) pm.collectionVariables.set(\"bkashPaymentId\", bkashPaymentId);",
+									"    }",
 									"}"
 								]
 							}
@@ -2529,6 +2535,38 @@
 							]
 						},
 						"description": "Manager-only bKash checkout creation. Set `plan` to `MONTHLY` (৳100 / 30 days), `HALF_YEARLY` (৳500 / 180 days), or `YEARLY` (৳1000 / 365 days). The response contains `data.paymentId` (our payment row) and `data.paymentURL`; both are saved to the `subscriptionPaymentId` / `paymentURL` collection variables. Open `paymentURL` in a browser on this machine to pay. A `PENDING` payment older than 30 minutes is failed automatically so a lost checkout can never block the next activation (`409` only while a fresh checkout is still open). `BKASH_CALLBACK_URL` must point at this API's `/api/v1/subscription/callback` or bKash will redirect somewhere that cannot finalize the payment."
+					},
+					"response": []
+				},
+				{
+					"name": "Payment Callback (bKash)",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/subscription/callback?paymentID={{bkashPaymentId}}&status=success",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"subscription",
+								"callback"
+							],
+							"query": [
+								{
+									"key": "paymentID",
+									"value": "{{bkashPaymentId}}"
+								},
+								{
+									"key": "status",
+									"value": "success"
+								}
+							]
+						},
+						"description": "Public bKash redirect target. bKash calls this after checkout, not the frontend. Requires `paymentID` (or `paymentId`) and `status`: missing parameters return `400` and an unknown gateway id returns `404`, but the controller catches every failure and still answers with a redirect so the browser always lands on the billing page.\n\n`status=success` executes or queries the payment, finalizes the row, extends the plan, and redirects with `?payment=success|pending`. `status=cancel` marks the row `CANCELLED` and redirects with `payment=cancel`; any other status marks it `FAILED` and redirects with `payment=failure`. The redirect also carries `paymentId` (our row) and `gatewayPaymentId`.\n\nRun Activate Subscription first: its test script saves `bkashPaymentId`, parsed from the checkout URL. Postman follows the `302` by default, so disable *Automatically follow redirects* to inspect the `Location` header. No auth header or cookie is used."
 					},
 					"response": []
 				},
@@ -2603,6 +2641,407 @@
 							]
 						},
 						"description": "Reconciles a payment by querying bKash, and the recovery path when the browser redirect or callback is lost. Responds `200` in every case: a customer who has not finished in the bKash app still gets the `PENDING` row (previously a `502`), and a completed charge returns the fresh row with `bkashTrxId`, `periodStart`, `periodEnd`, and `status: \"PAID\"`. The payment must belong to the caller's active mess."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "AI",
+			"item": [
+				{
+					"name": "Chat with TallyBot",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"const data = body && body.data ? body.data : {};",
+									"",
+									"pm.test(\"reply is a non-empty string\", () => {",
+									"    pm.expect(data.reply, \"reply\").to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"// TallyBot is read-only; it must never return write proposals.",
+									"pm.test(\"no write proposals are returned\", () => {",
+									"    pm.expect(data.proposals, \"proposals\").to.be.an(\"array\").that.is.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"What is the meal rate this month?\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/ai/chat",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ai",
+								"chat"
+							]
+						},
+						"description": "Runs TallyBot, the read-only assistant, over the caller's mess. `messages` must contain 1-20 items; each item is `{ role: \"user\" | \"assistant\", content }` with 1-1000 characters, and the last item must be from the user. Only the last 6 messages plus a server system prompt are sent to the model.\n\nEvery figure comes from read-only tools (dashboard, summary, meals, bazar, utility bills and fund deposits) resolved through the caller's ACTIVE membership, so the JWT stays identity-only and the answer is limited to the caller's mess and role. Writes are impossible: `proposals` is always `[]`.\n\nThe limit is 20 messages per minute per user (`429`); a provider failure returns `502` and provider rate limiting returns `503`. Responds `200` with `data: { reply, proposals }`, where `reply` is plain text (no markdown). The server refuses to start without `AI_API_KEY`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Admin",
+			"description": "Platform staff endpoints (ADMIN / SUPERADMIN). Seed the first account with `npm run seed:admin` (SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD in .env), then call Auth > Login with it. Not mess-scoped. See API.md \"Admin\" (#57-63).",
+			"item": [
+				{
+					"name": "Overview",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/overview",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"overview"
+							]
+						},
+						"description": "Totals for users, messes and revenue (net of refunds)."
+					},
+					"response": []
+				},
+				{
+					"name": "List Users",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users?search=&mess=&role=USER&status=ACTIVE&page=1&limit=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true,
+									"description": "Name or email"
+								},
+								{
+									"key": "mess",
+									"value": "",
+									"disabled": true,
+									"description": "Mess name"
+								},
+								{
+									"key": "role",
+									"value": "USER",
+									"disabled": true,
+									"description": "USER | ADMIN | SUPERADMIN"
+								},
+								{
+									"key": "status",
+									"value": "ACTIVE",
+									"disabled": true,
+									"description": "ACTIVE | INACTIVE | SUSPENDED | DELETED"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": false
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"disabled": false
+								}
+							]
+						},
+						"description": "Paginated users with platform role, status and mess memberships. `meta` holds pagination. Copy an id into {{adminUserId}}."
+					},
+					"response": []
+				},
+				{
+					"name": "Suspend User",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users/{{adminUserId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users",
+								"{{adminUserId}}",
+								"status"
+							]
+						},
+						"description": "Suspended users get 401 on their next request and cannot log in. 400 for your own account; 403 for a SUPERADMIN, or for an ADMIN target unless you are SUPERADMIN.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"SUSPENDED\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reactivate User",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users/{{adminUserId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users",
+								"{{adminUserId}}",
+								"status"
+							]
+						},
+						"description": "Lets a suspended user sign in again.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"ACTIVE\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change User Role",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users/{{adminUserId}}/role",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users",
+								"{{adminUserId}}",
+								"role"
+							]
+						},
+						"description": "SUPERADMIN only (403 otherwise). role: USER | ADMIN. The user must sign in again for the new role to apply.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"role\": \"ADMIN\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Messes",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/messes?search=&plan=PRO&subscriptionType=MONTHLY&page=1&limit=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"messes"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true,
+									"description": "Mess name or room code"
+								},
+								{
+									"key": "plan",
+									"value": "PRO",
+									"disabled": true,
+									"description": "Effective plan: FREE | PRO"
+								},
+								{
+									"key": "subscriptionType",
+									"value": "MONTHLY",
+									"disabled": true,
+									"description": "Current paid period: MONTHLY | HALF_YEARLY | YEARLY"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": false
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"disabled": false
+								}
+							]
+						},
+						"description": "Paginated messes with effective plan, current subscription type, members, owner/manager and total paid. Copy an id into {{adminMessId}}."
+					},
+					"response": []
+				},
+				{
+					"name": "Grant / Extend PRO",
+					"event": [],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/messes/{{adminMessId}}/plan",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"messes",
+								"{{adminMessId}}",
+								"plan"
+							]
+						},
+						"description": "days: 1-730. Extends from the current expiry when PRO is active. No payment is recorded, so it is not revenue.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"days\": 30\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Revenue",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/revenue?from=2026-01-01&to=2026-12-31&page=1&limit=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"revenue"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "2026-01-01",
+									"disabled": true,
+									"description": "YYYY-MM-DD, inclusive"
+								},
+								{
+									"key": "to",
+									"value": "2026-12-31",
+									"disabled": true,
+									"description": "YYYY-MM-DD, inclusive"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": false
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"disabled": false
+								}
+							]
+						},
+						"description": "Totals, by-type breakdown, monthly series and paginated payments. Default range: the last 12 months."
 					},
 					"response": []
 				}
@@ -2746,6 +3185,21 @@
 		},
 		{
 			"key": "paymentURL",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "bkashPaymentId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "adminUserId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "adminMessId",
 			"value": "",
 			"type": "string"
 		}

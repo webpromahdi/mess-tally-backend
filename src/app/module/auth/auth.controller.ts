@@ -166,7 +166,26 @@ const resetPassword = catchAsync(async (req: Request, res: Response) => {
 	});
 });
 
+// No auth guard: an expired session must still be able to clear its cookies.
+const logout = catchAsync(async (_req: Request, res: Response) => {
+	const options = {
+		httpOnly: true,
+		secure: config.node_env !== "development",
+		sameSite: config.node_env === "development" ? "lax" : "none",
+	} as const;
+	res.clearCookie("accessToken", options);
+	res.clearCookie("refreshToken", options);
+
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: "Logged out successfully",
+		data: null,
+	});
+});
+
 export const authController = {
+	logout,
 	registerUser,
 	verifyEmail,
 	loginUser,

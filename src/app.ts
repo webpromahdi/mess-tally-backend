@@ -9,6 +9,8 @@ import httpStatus from "http-status";
 import config from "./app/config";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
+import { adminRoutes } from "./app/module/admin/admin.route";
+import { aiRoutes } from "./app/module/ai/ai.route";
 import { AuthRoutes } from "./app/module/auth/auth.route";
 import { bazarRoutes } from "./app/module/bazar/bazar.route";
 import { dashboardRoutes } from "./app/module/dashboard/dashboard.route";
@@ -50,6 +52,8 @@ app.use("/api/v1/summary", summaryRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/profile", ProfileRoute);
 app.use("/api/v1/subscription", subscriptionRoutes);
+app.use("/api/v1/ai", aiRoutes);
+app.use("/api/v1/admin", adminRoutes);
 
 // Basic route
 app.get("/", async (req: Request, res: Response) => {

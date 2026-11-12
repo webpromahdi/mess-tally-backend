@@ -159,7 +159,7 @@ A mess is PRO only while `plan = PRO` **and** `planExpiresAt > now`. There is no
 
 | Capability | FREE | PRO |
 |---|---|---|
-| Active members | up to 5 | unlimited |
+| Active members | up to 5 | up to 100 |
 | Bazar receipt image upload/delete | `402` | allowed |
 | Self-service meals (`PATCH /meals/me`) | `402` | allowed |
 | Past-month reads (meals, bazar, utilities, deposits, summary, dashboard, export) | `402` | allowed |
@@ -263,6 +263,13 @@ Duplicate-key and FK failures are mapped to `400` with `Duplicate Key Error` / `
 | 54 | POST | `/subscription/activate` | Manager | Subscription |
 | 55 | GET | `/subscription/payments` | Active member | Subscription |
 | 56 | GET | `/subscription/payments/:id/status` | Active member | Subscription |
+| 57 | GET | `/admin/overview` | Admin | Admin |
+| 58 | GET | `/admin/users` | Admin | Admin |
+| 59 | PATCH | `/admin/users/:id/status` | Admin | Admin |
+| 60 | PATCH | `/admin/users/:id/role` | Super admin | Admin |
+| 61 | GET | `/admin/messes` | Admin | Admin |
+| 62 | PATCH | `/admin/messes/:id/plan` | Admin | Admin |
+| 63 | GET | `/admin/revenue` | Admin | Admin |
 
 ---
 
@@ -822,7 +829,7 @@ When `requireApproval = false`, the message is `Joined the mess successfully`, `
 | `409` | `You are already an active member of "Other Mess". Leave it before joining another mess` | One active mess per user |
 | `409` | `Your join request for this mess is already pending approval` | Duplicate pending request |
 | `409` | `You are already a member of this mess` | Membership is `ACTIVE` |
-| `409` | `The FREE plan allows up to 5 active members. Upgrade to PRO for unlimited members.` | Auto-join into a full FREE mess |
+| `409` | `The FREE plan allows up to 5 active members. Upgrade to PRO for up to 100 members.` | Auto-join into a full FREE mess |
 
 ---
 
@@ -987,7 +994,7 @@ Success `200`:
 | `404` | `No member found with this id in your mess` | Unknown or cross-mess id |
 | `409` | `Only pending join requests can be approved. This member is already ACTIVE.` | Status is not `PENDING` |
 | `409` | `This user is already an active member of "Other Mess". They must leave that mess before they can be approved here.` | One active mess per user |
-| `409` | `The FREE plan allows up to 5 active members. Upgrade to PRO for unlimited members.` | FREE capacity reached |
+| `409` | `The FREE plan allows up to 5 active members. Upgrade to PRO for up to 100 members.` | FREE capacity reached |
 
 ---
 
@@ -3084,7 +3091,7 @@ Success `200`:
     "isPro": true,
     "planExpiresAt": "2026-11-22T10:00:00.000Z",
     "limits": {
-      "maxActiveMembers": null
+      "maxActiveMembers": 100
     },
     "features": {
       "bazarReceiptUploads": true,
@@ -3257,6 +3264,164 @@ Success `200`:
 | `404` | `Subscription payment not found.` | Unknown/cross-mess payment id |
 | `502` | `bKash amount does not match the subscription payment.` / `bKash did not return a transaction id.` / `bKash paymentID does not match the stored checkout.` / other mismatch messages | Gateway verification failed |
 | `500` | gateway/network error text | Status query failed |
+
+## Admin
+
+Platform-wide endpoints for staff accounts (`role` `ADMIN` or `SUPERADMIN`). They are **not** mess-scoped: an admin needs no mess. Every route runs `auth(ADMIN, SUPERADMIN)`, so a normal user gets `403` and a missing/expired session gets `401`.
+
+The first account is created with `npm run seed:admin`, which reads `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` and optional `SUPER_ADMIN_NAME` from `.env`. It is idempotent: an existing user with that email is promoted to `SUPERADMIN` (password unchanged), otherwise the user is created verified and active.
+
+List endpoints take `page` (default `1`) and `limit` (default `20`, max `100`) and return a top-level `meta: { page, limit, total, totalPages }` next to `data`.
+
+**Permission rules (endpoints that change a user):**
+
+| Rule | Error |
+|---|---|
+| You cannot change your own account | `400` |
+| A `SUPERADMIN` account cannot be changed through the API | `403` |
+| Only a `SUPERADMIN` can suspend or reactivate an `ADMIN` | `403` |
+| Only a `SUPERADMIN` can change roles; `SUPERADMIN` is never assignable | `403` / `400` (validation) |
+| Unknown or deleted user / unknown mess | `404` |
+
+### 57. `GET /admin/overview`
+
+**Access:** Admin. Platform totals.
+
+```json
+{
+  "users": { "total": 4, "active": 4, "suspended": 0, "newThisMonth": 2 },
+  "messes": { "total": 1, "pro": 1, "free": 0, "proExpiringIn7Days": 0 },
+  "revenue": { "allTime": 300, "thisMonth": 100, "currency": "BDT" }
+}
+```
+
+`users.total` excludes deleted accounts. Revenue is net of refunds and counts only bKash payments (`PAID`, plus `REFUNDED` minus the refunded amount).
+
+### 58. `GET /admin/users`
+
+**Access:** Admin.
+
+| Query | Meaning |
+|---|---|
+| `search` | Case-insensitive match on name **or** email |
+| `mess` | Case-insensitive match on the name of any mess the user belongs to (any membership status) |
+| `role` | `USER` \| `ADMIN` \| `SUPERADMIN` |
+| `status` | `ACTIVE` \| `INACTIVE` \| `SUSPENDED` \| `DELETED` |
+| `page`, `limit` | Pagination |
+
+Newest accounts first. Each item:
+
+```json
+{
+  "id": "uuid",
+  "name": "Mahdi Hasan",
+  "email": "mahdi@example.com",
+  "role": "USER",
+  "status": "ACTIVE",
+  "emailVerified": true,
+  "isDeleted": false,
+  "createdAt": "2026-10-01T08:00:00.000Z",
+  "phone": "01700000000",
+  "imageUrl": null,
+  "activeMess": { "id": "uuid", "name": "Sunrise Mess" },
+  "memberships": [
+    { "messId": "uuid", "messName": "Sunrise Mess", "role": "OWNER", "isManager": true, "status": "ACTIVE", "joinedAt": "2026-10-01T08:05:00.000Z" }
+  ]
+}
+```
+
+### 59. `PATCH /admin/users/:id/status`
+
+**Access:** Admin (see permission rules). Body: `{ "status": "SUSPENDED" }` or `{ "status": "ACTIVE" }`. Returns the updated user (same shape as #58).
+
+A suspended user is rejected by `auth()` on their next request (`401`), and login and token refresh refuse them until they are reactivated. Their mess data is not touched.
+
+### 60. `PATCH /admin/users/:id/role`
+
+**Access:** `SUPERADMIN` only. Body: `{ "role": "ADMIN" }` or `{ "role": "USER" }`. Returns the updated user.
+
+The JWT carries the role, so the user must sign in again before the new role applies.
+
+### 61. `GET /admin/messes`
+
+**Access:** Admin.
+
+| Query | Meaning |
+|---|---|
+| `search` | Case-insensitive match on mess name **or** room code |
+| `plan` | Effective plan: `PRO` = `plan = PRO` and `planExpiresAt` in the future; `FREE` = everything else (including expired PRO) |
+| `subscriptionType` | `MONTHLY` \| `HALF_YEARLY` \| `YEARLY`: messes whose **current** paid period (`periodStart ≤ now < periodEnd`) is that type |
+| `page`, `limit` | Pagination |
+
+Newest messes first. Each item:
+
+```json
+{
+  "id": "uuid",
+  "name": "Sunrise Mess",
+  "roomCode": "SUN-4821",
+  "plan": "PRO",
+  "planExpiresAt": "2026-12-12T10:00:00.000Z",
+  "subscriptionType": "MONTHLY",
+  "activeMembers": 3,
+  "memberLimit": 100,
+  "owner": { "id": "uuid", "name": "Mahdi Hasan", "email": "mahdi@example.com" },
+  "manager": { "id": "uuid", "name": "Mahdi Hasan", "email": "mahdi@example.com" },
+  "totalPaid": 300,
+  "createdAt": "2026-10-01T08:05:00.000Z"
+}
+```
+
+`subscriptionType` is `null` on a FREE mess, and on a PRO mess whose current period was granted by an admin (#62). `totalPaid` is the mess's net bKash payments, all time.
+
+### 62. `PATCH /admin/messes/:id/plan`
+
+**Access:** Admin. Body: `{ "days": 30 }` (whole number, `1` to `730`).
+
+Grants or extends PRO without a payment (support or compensation). An active PRO is extended from its current `planExpiresAt`; otherwise the period starts now. No `Payment` row is created, so it never appears in revenue. Returns the updated mess (same shape as #61).
+
+### 63. `GET /admin/revenue`
+
+**Access:** Admin.
+
+| Query | Meaning |
+|---|---|
+| `from`, `to` | `YYYY-MM-DD`, both inclusive, by `paidAt` (UTC). Default: the current month and the 11 before it. Max range 5 years. |
+| `page`, `limit` | Pagination of `payments` |
+
+```json
+{
+  "range": { "from": "2025-12-01T00:00:00.000Z", "to": "2026-11-13T09:00:00.000Z" },
+  "currency": "BDT",
+  "totals": { "gross": 300, "refunds": 0, "net": 300, "payments": 3 },
+  "byType": [{ "type": "MONTHLY", "amount": 300, "count": 3 }],
+  "monthly": [{ "month": "2026-11", "amount": 100, "count": 1 }],
+  "payments": [
+    {
+      "id": "uuid",
+      "type": "MONTHLY",
+      "status": "PAID",
+      "amount": 100,
+      "refundAmount": null,
+      "currency": "BDT",
+      "durationDays": 30,
+      "paidAt": "2026-11-02T12:00:00.000Z",
+      "bkashTrxId": "BK123456",
+      "mess": { "id": "uuid", "name": "Sunrise Mess" },
+      "paidBy": { "name": "Mahdi Hasan", "email": "mahdi@example.com" }
+    }
+  ]
+}
+```
+
+`monthly` has one point per month in the range, with `0` for months without payments. Amounts in `byType` and `monthly` are net of refunds.
+
+| Status | Message | When |
+|---|---|---|
+| `400` | `` `from` must be on or before `to`. `` | Reversed range |
+| `400` | `Choose a range of at most 5 years.` | Range too long |
+
+---
 
 ## Global error reference
 

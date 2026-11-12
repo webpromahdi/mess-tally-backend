@@ -41,6 +41,11 @@ export default {
 	// Timezone used for today/cutoff and the "current month" archive gate.
 	app_timezone: process.env.APP_TIMEZONE || "Asia/Dhaka",
 
+	// TallyBot: any OpenAI-compatible chat API (Groq by default).
+	ai_api_key: process.env.AI_API_KEY!,
+	ai_base_url: process.env.AI_BASE_URL || "https://api.groq.com/openai/v1",
+	ai_model: process.env.AI_MODEL || "llama-3.3-70b-versatile",
+
 	// Frontend page bKash redirects back to after the callback.
 	frontend_billing_path: process.env.FRONTEND_BILLING_PATH || "/settings/billing",
 };
